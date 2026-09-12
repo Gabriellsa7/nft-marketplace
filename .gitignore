@@ -23,6 +23,9 @@ src/routeTree.gen.ts
 /blob-report/
 /playwright/.cache/
 
+# Never accidentally stage the user's home Downloads folder
+/Downloads/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
