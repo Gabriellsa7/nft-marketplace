@@ -46,30 +46,73 @@ async function hashRequestBody(input: CreateOrderInput): Promise<string> {
     .join('')
 }
 
-/** Resolves a pending order after a delay, simulating on-chain confirmation, and
- * broadcasts the transition over the mock Socket.IO channel (order.updated) — REST
- * polling on GET /api/orders/:id remains as a fallback for reconnect/refresh recovery. */
+/**
+ * Settles a pending order as confirmed or declined, simulating the on-chain outcome, and
+ * broadcasts the transition over the mock Socket.IO channel (order.updated) — REST polling
+ * on GET /api/orders/:id remains as a fallback for reconnect/refresh recovery.
+ *
+ * Stock is only decremented and cart items only removed on confirmation — a declined order
+ * must leave the catalog and the collector's cart exactly as they were (see the "itens
+ * continuam disponíveis" copy on the declined confirmation screen).
+ */
+function resolveOrder(orderId: string, status: 'confirmed' | 'declined') {
+  const db = getDb()
+  const order = db.orders.find((o) => o.id === orderId)
+  if (!order || order.status !== 'pending') return
+
+  if (status === 'confirmed') {
+    const purchasedByNft = new Map<string, { editionId: string; quantity: number }[]>()
+    for (const item of order.items) {
+      const list = purchasedByNft.get(item.nftId) ?? []
+      list.push({ editionId: item.editionId, quantity: item.quantity })
+      purchasedByNft.set(item.nftId, list)
+    }
+    for (const [nftId, purchases] of purchasedByNft) {
+      bumpAndBroadcastNft(nftId, (nft) => {
+        for (const purchase of purchases) {
+          const edition = nft.editions.find((e) => e.id === purchase.editionId)
+          if (edition) edition.available = Math.max(0, edition.available - purchase.quantity)
+        }
+      })
+    }
+
+    const cart = db.carts[`user:${order.userId}`]
+    if (cart) {
+      cart.items = cart.items
+        .map((item) => {
+          const purchased = order.items.find(
+            (o) => o.nftId === item.nftId && o.editionId === item.editionId,
+          )
+          if (!purchased) return item
+          const remaining = item.quantity - purchased.quantity
+          return remaining > 0 ? { ...item, quantity: remaining } : null
+        })
+        .filter((item): item is NonNullable<typeof item> => item !== null)
+      cart.updatedAt = new Date().toISOString()
+    }
+  }
+
+  order.status = status
+  order.transactionRef = status === 'confirmed' ? `0xtx_${Math.random().toString(36).slice(2, 12)}` : null
+  order.updatedAt = new Date().toISOString()
+  order.version += 1
+  persistDb()
+
+  const envelope: RealtimeEnvelope<Order> = {
+    resourceId: order.id,
+    version: order.version,
+    occurredAt: order.updatedAt,
+    resource: toPublicOrder(order),
+  }
+  emitOrderUpdated(order.userId, envelope)
+}
+
+/** Resolves a pending order after a delay, simulating on-chain confirmation latency. */
 function scheduleOrderResolution(orderId: string) {
   setTimeout(() => {
-    const db = getDb()
-    const order = db.orders.find((o) => o.id === orderId)
-    if (!order || order.status !== 'pending') return
-
     // Deterministic-ish outcome so demos stay mostly successful; declines are rare.
     const declined = Math.random() < 0.08
-    order.status = declined ? 'declined' : 'confirmed'
-    order.transactionRef = declined ? null : `0xtx_${Math.random().toString(36).slice(2, 12)}`
-    order.updatedAt = new Date().toISOString()
-    order.version += 1
-    persistDb()
-
-    const envelope: RealtimeEnvelope<Order> = {
-      resourceId: order.id,
-      version: order.version,
-      occurredAt: order.updatedAt,
-      resource: toPublicOrder(order),
-    }
-    emitOrderUpdated(order.userId, envelope)
+    resolveOrder(orderId, declined ? 'declined' : 'confirmed')
   }, ORDER_RESOLUTION_DELAY_MS)
 }
 
@@ -137,38 +180,8 @@ export const orderHandlers = [
         })
       }
 
-      // Reserve stock and broadcast nft.updated so catalog/detail/cart observers see the drop.
-      const purchasedByNft = new Map<string, typeof quote.items>()
-      for (const quoteItem of quote.items) {
-        const list = purchasedByNft.get(quoteItem.nftId) ?? []
-        list.push(quoteItem)
-        purchasedByNft.set(quoteItem.nftId, list)
-      }
-      for (const [nftId, purchases] of purchasedByNft) {
-        bumpAndBroadcastNft(nftId, (nft) => {
-          for (const purchase of purchases) {
-            const edition = nft.editions.find((e) => e.id === purchase.editionId)
-            if (edition) edition.available -= purchase.quantity
-          }
-        })
-      }
-
-      // Remove only the purchased items/quantities from the user's cart.
-      const cart = db.carts[`user:${session.userId}`]
-      if (cart) {
-        cart.items = cart.items
-          .map((item) => {
-            const purchased = quote.items.find(
-              (q) => q.nftId === item.nftId && q.editionId === item.editionId,
-            )
-            if (!purchased) return item
-            const remaining = item.quantity - purchased.quantity
-            return remaining > 0 ? { ...item, quantity: remaining } : null
-          })
-          .filter((item): item is NonNullable<typeof item> => item !== null)
-        cart.updatedAt = new Date().toISOString()
-      }
-
+      // Stock isn't decremented and cart items aren't removed until the order actually
+      // confirms (see resolveOrder) — a pending/declined order must not affect either.
       const now = new Date().toISOString()
       const order: StoredOrder = {
         id: `order-${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`,
@@ -212,6 +225,28 @@ export const orderHandlers = [
         throw new HandlerError(404, 'not_found', 'Pedido não encontrado.')
       }
       return HttpResponse.json(toPublicOrder(order))
+    } catch (err) {
+      if (err instanceof HandlerError) return err.toResponse()
+      throw err
+    }
+  }),
+
+  // Test-only utility (mirrors /api/nfts/:id/_simulate-update) to deterministically resolve a
+  // pending order instead of waiting on the randomized confirm/decline timer — avoids flaky
+  // Playwright runs on the "compra completa"/"falha de pagamento" scenarios.
+  http.post('/api/orders/:id/_resolve', async ({ request, params }) => {
+    try {
+      const session = requireSession(request)
+      const body = (await request.json()) as { status: 'confirmed' | 'declined' }
+
+      const db = getDb()
+      const order = db.orders.find((o) => o.id === params.id)
+      if (!order || order.userId !== session.userId) {
+        throw new HandlerError(404, 'not_found', 'Pedido não encontrado.')
+      }
+
+      resolveOrder(order.id, body.status)
+      return HttpResponse.json(toPublicOrder(db.orders.find((o) => o.id === order.id)!))
     } catch (err) {
       if (err instanceof HandlerError) return err.toResponse()
       throw err

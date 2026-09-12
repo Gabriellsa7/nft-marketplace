@@ -1,0 +1,121 @@
+# Arquitetura
+
+Este documento cobre os contratos REST e de eventos, a política de sessão, o estado do carrinho, a estratégia de cache do TanStack Query, a reconciliação REST/Socket.IO, limitações conhecidas, decisões de UX e os desvios do Figma. Para setup/comandos/credenciais, ver `README.md`.
+
+## Contratos REST
+
+Base: `/api` (via Axios, `src/lib/api-client.ts`). Erros seguem sempre o formato `ApiErrorBody`: `{ code, message, fields? }`, com `code` em `ApiErrorCode` (`validation_error`, `unauthenticated`, `conflict`, `not_found`, `availability_conflict`, `coupon_invalid`, `coupon_expired`, `quote_stale`, `idempotency_conflict`, `transient_error`).
+
+| Recurso | Endpoint | Observações |
+| --- | --- | --- |
+| Sessão | `POST /auth/register` | Cria conta + sessão; 422 (campos) ou 409 (e-mail já cadastrado). |
+| | `POST /auth/login` | 401 com erro no campo `password` em caso de credenciais inválidas. |
+| | `GET /auth/session` | Nunca dispara o evento global de "sessão expirada" (ver política de sessão); 401 é tratado como "sem sessão", não como erro. |
+| | `POST /auth/logout` | Remove a sessão do lado mock. |
+| | `POST /auth/_expire` *(teste)* | Expira a sessão atual imediatamente. |
+| NFTs | `GET /nfts?search&category&minPrice&maxPrice&sort&page&pageSize` | Paginado (`Paginated<Nft>`); busca cobre nome/coleção/criador/descrição. |
+| | `GET /nfts/:id` | Aceita id ou slug; 404 dedicado (tratado como `notFound()` na rota). |
+| | `POST /nfts/:id/_simulate-update` *(teste)* | Dispara `nft.updated` determinístico. |
+| Favoritos | `GET /favorites` | Requer sessão. |
+| | `POST /favorites/:nftId` / `DELETE /favorites/:nftId` | Idempotentes (adicionar 2x não duplica). |
+| Carrinho | `GET /cart` | Também re-sincroniza preço/disponibilidade contra o catálogo vivo a cada leitura (ver "Estado do carrinho"). |
+| | `POST /cart/items` `{nftId, editionId, quantity}` | 409 `availability_conflict` se exceder o estoque. |
+| | `PATCH /cart/items/:itemId` `{quantity}` | |
+| | `DELETE /cart/items/:itemId` | |
+| | `POST /cart/merge` `{guestCartId}` | Só autenticado; funde o carrinho de visitante no da conta. |
+| Cotação | `POST /quote` `{items, couponCode?}` | Recalcula subtotal/desconto/taxa/total em `decimal.js`; devolve `quoteVersion` (TTL de 2 min) usado para criar o pedido. |
+| Pedidos | `POST /orders` `{quoteVersion, walletId, network, collectorName, collectorEmail}` | Requer header `Idempotency-Key` (ver "Idempotência"). |
+| | `GET /orders/:id` | Só o dono do pedido pode ler. |
+| | `POST /orders/:id/_resolve` *(teste)* `{status}` | Resolve um pedido pendente na hora (confirmado/recusado). |
+| Perfil | `GET /profile` / `PATCH /profile` `{name?, email?, avatarUrl?}` | E-mail duplicado → 409. |
+| | `POST /profile/password` `{currentPassword, newPassword}` | Ao suceder, invalida todas as outras sessões do usuário. |
+| Carteiras | `GET /wallets` / `POST /wallets` / `PATCH /wallets/:id` | Endereço deve casar `^0x[a-fA-F0-9]{40}$`; endereço duplicado → 409; marcar uma carteira como `primary` rebaixa a anterior. |
+
+Os três endpoints marcados *(teste)* existem só para dar determinismo aos testes Playwright (ver README) — nunca são chamados pela UI de produção.
+
+## Eventos Socket.IO
+
+Transporte: `socket.io-client` real, mockado via [`@mswjs/socket.io-binding`](https://github.com/mswjs/socket.io-binding) (`src/mocks/socket-server.ts`). Limitações documentadas do ambiente de mock:
+
+- O binding só intercepta o handshake **WebSocket** nativo do Socket.IO, não o long-polling HTTP — por isso o cliente é forçado a `transports: ['websocket']` (`src/lib/socket.ts`), pulando a etapa de upgrade que o mock não entende.
+- MSW normaliza `/socket.io/` para `/` no pathname antes de casar o link — o `ws.link()` do lado servidor aponta para a origem "nua" (`ws://host/`), nunca incluindo `/socket.io/` no padrão.
+- `socket.io-client` captura `globalThis.WebSocket` no momento em que o módulo é importado, não quando conecta. Por isso `getSocket()` faz um `import()` dinâmico, chamado só de dentro de um `useEffect` — garantindo que o MSW já tenha corrigido `window.WebSocket` antes do cliente real ser instanciado.
+
+Eventos implementados:
+
+| Evento | Payload | Escopo | Efeito no cliente |
+| --- | --- | --- | --- |
+| `nft.updated` | `RealtimeEnvelope<Nft>` | Broadcast (dado público de catálogo) | Atualiza o cache do detalhe se `version` for maior; invalida listas de catálogo, carrinho e cotação. |
+| `order.updated` | `RealtimeEnvelope<Order>` | Só para a conexão identificada como dona do pedido | Atualiza o cache do pedido se `version` for maior. |
+
+`RealtimeEnvelope<T> = { resourceId, version, occurredAt, resource }`. Todo handler de evento compara a `version` recebida com a do recurso em cache e só aplica se for estritamente maior — eventos duplicados ou fora de ordem nunca regridem um estado mais novo (coberto por `e2e/realtime.spec.ts`).
+
+O cliente se identifica ao servidor logo após conectar (`socket.emit('identify', token)`), inclusive em toda reconexão — é assim que `order.updated` nunca vaza entre sessões: o servidor só emite para conexões cujo `identify` mais recente corresponde ao usuário dono do pedido.
+
+## Política de sessão
+
+- Token opaco (`tok_...`) emitido em login/registro, guardado em `localStorage["nft-marketplace-auth-token"]`, enviado como `Authorization: Bearer <token>`. TTL de 20 minutos no lado mock (`SESSION_TTL_MS`).
+- Visitante (sem token) usa um `X-Guest-Cart-Id` gerado uma vez e persistido em `localStorage["nft-marketplace-guest-cart-id"]`, para o carrinho sobreviver a refresh antes do login.
+- `GET /auth/session` resolve para `null` em vez de lançar em caso de 401 (`fetchSession()` em `features/auth/api.ts`) — assim navegação anônima não dispara nenhum evento de "não autorizado".
+- Qualquer **outra** chamada autenticada que volte 401 dispara `UNAUTHORIZED_EVENT` (`window` custom event, `src/lib/api-client.ts`), ouvido uma única vez em `__root.tsx`: limpa o cache de `session` e de todos os dados privados (`cart`, `favorites`, `orders`, `profile`, `wallets`) e redireciona para `/login?redirect=<url atual>` — cobrindo tanto expiração durante navegação quanto durante o checkout, com retomada após novo login.
+- Logout e troca de usuário passam pelo mesmo `clearPrivateCaches()` (usado também no `onSuccess` de login/registro) — garante que dados da sessão anterior nunca aparecem, nem por um instante, sob a nova sessão.
+- Alterar a senha invalida todas as **outras** sessões do usuário (mantém só a que fez a troca).
+
+## Estado do carrinho
+
+- Particionado por "dono do carrinho": `user:<id>` quando autenticado, `guest:<guestCartId>` caso contrário (`resolveCartOwner()`).
+- `POST /cart/merge`, chamado automaticamente após login/registro bem-sucedido, funde o carrinho de visitante no da conta (soma quantidades, limitada à disponibilidade da edição) e descarta o carrinho de visitante.
+- Toda leitura (`GET /cart`) re-sincroniza cada item contra o catálogo vivo, marcando `priceChanged`/`availabilityChanged` sem alterar a quantidade guardada — é assim que o carrinho mostra o aviso "o preço mudou" mesmo que o usuário não tenha feito nada.
+- Valores em ETH trafegam sempre como string decimal (nunca `number`), calculados com `decimal.js` no lado mock, para não perder precisão.
+- Estoque só é decrementado e itens só são removidos do carrinho **na confirmação** do pedido, nunca na criação (ver "Ciclo de vida do pedido").
+
+## Estratégia de cache (TanStack Query)
+
+| Query | `staleTime` | Retry | Notas |
+| --- | --- | --- | --- |
+| `session` | 60s | não | Evita rechecar a sessão a cada navegação. |
+| `cart` | 10s | padrão | Curto o bastante para refletir mutações de outra aba/evento em tempo real. |
+| `favorites` | padrão | padrão | Habilitada só quando há usuário logado. |
+| `quote` | 15s | não | `keepPreviousData` evita flicker de skeleton a cada pequena edição de quantidade/cupom; chave inclui os itens + cupom, então muda de identidade a cada edição real. |
+| `nfts` (lista) | padrão | padrão | `keepPreviousData` evita flicker ao paginar/filtrar. |
+| `nfts` (detalhe) | padrão | 1 tentativa, **nunca** em 404 | 404 vai direto para o estado "não encontrado". |
+| `orders/:id` | padrão | padrão | `refetchInterval` de 1.5s **enquanto** `status === 'pending'`; para sozinho ao virar terminal (`confirmed`/`declined`). Esse polling é o fallback REST que reconcilia o estado do pedido em caso de desconexão do socket ou reload da página. |
+
+Atualização otimista com rollback: favoritar/desfavoritar (`useToggleFavoriteMutation`) e alterar quantidade/remover item do carrinho (`useUpdateCartItemMutation`/`useRemoveCartItemMutation`) aplicam a mudança no cache imediatamente (`onMutate`) e revertem (`onError`) se a mutação falhar — cobertos por `e2e/favorites.spec.ts` (falha forçada via cenário `offline`) e `e2e/cart.spec.ts`. Adicionar item ao carrinho **não** é otimista (só atualiza o cache em `onSuccess`) — decisão deliberada, já que adicionar depende de uma resposta do servidor com o item já mesclado/validado contra o estoque.
+
+## Reconciliação REST ↔ Socket.IO
+
+`useRealtimeSync()` (montado uma única vez em `__root.tsx`) é o ponto único de reconciliação:
+
+1. No `connect` do socket (incluindo toda reconexão), emite `identify(token)` e invalida `['nfts']`, `['cart']`, `['quote']` e `['orders']` — qualquer evento perdido enquanto desconectado é reparado por um refetch REST imediato.
+2. `nft.updated`/`order.updated` só são aplicados se a `version` do envelope for maior que a do cache (tolera duplicatas/entrega fora de ordem sem regredir estado).
+3. O efeito depende do `userId` da sessão — trocar de usuário desconecta e reconecta o socket do zero, então o `identify` sempre reflete a sessão atual e um evento da sessão anterior nunca alcança a próxima.
+4. Um pedido pendente sobrevive a um reload de página: `GET /orders/:id` (com `refetchInterval` enquanto pendente) e a reconexão do socket cobrem a mesma necessidade por dois caminhos independentes — o que chegar primeiro atualiza a UI, sem duplicar a compra (coberto por `e2e/realtime.spec.ts`).
+
+## Idempotência e ciclo de vida do pedido
+
+- `POST /orders` exige o header `Idempotency-Key`. O mock guarda `{orderId, requestHash}` por chave (`requestHash` = SHA-256 do corpo). Mesma chave + mesmo corpo → devolve o pedido já criado (200); mesma chave + corpo diferente → 409 `idempotency_conflict`.
+- O checkout (`src/routes/checkout.tsx`) gera uma chave por tentativa de compra via `sessionStorage`, só limpa em caso de sucesso — então um clique duplo, um timeout de rede ou um reload antes da resposta reaproveitam a mesma chave, garantindo no máximo um pedido por tentativa.
+- Antes de confirmar, o checkout busca uma cotação fresca (`quote.refetch()`) e compara com a cotação revisada na tela; qualquer diferença de total/subtotal, ou um item do carrinho marcado como alterado, bloqueia o envio e exige nova revisão do colecionador (cenário do enunciado: preço mudando durante o checkout).
+- **Estoque só é decrementado e o carrinho só perde os itens comprados na confirmação do pedido** (`resolveOrder()` em `src/mocks/handlers/orders.ts`), nunca na criação. Um pedido `pending` ou `declined` não tem nenhum efeito colateral em estoque/carrinho — corrige uma inconsistência inicial em que a recusa "consumia" o item mesmo dizendo ao usuário que ele "continua disponível para nova compra". Resolução acontece via um timer real de ~4s com 8% de chance de recusa (comportamento de demonstração) ou, em teste, via `POST /orders/:id/_resolve`.
+- O recibo (`GET /orders/:id`) é um snapshot: valores gravados no momento da criação do pedido, nunca recalculados a partir do catálogo atual — uma mudança de preço posterior no mesmo NFT não altera pedidos já criados.
+
+## Limitações conhecidas
+
+- Sem persistência real entre dispositivos/abas incógnitas — tudo vive em `localStorage` do navegador (por design, já que não há backend).
+- `POST /nfts/:id/_simulate-update`, `/auth/_expire` e `/orders/:id/_resolve` são hooks só de teste, sem autenticação de operador — aceitáveis aqui porque toda a API já é uma simulação local, mas não deveriam existir num backend real.
+- Reserva de estoque a partir da criação do pedido não existe (dois pedidos pendentes simultâneos para a mesma edição poderiam, em teoria, ambos confirmar além do disponível) — irrelevante no cenário de demonstração (um único navegador/sessão por vez), documentado aqui como trade-off consciente em favor de "preservar itens em pedidos não confirmados".
+- `ReactQueryDevtools` é renderizado incondicionalmente em `src/main.tsx` (não hospedado atrás de `import.meta.env.DEV`), então o botão flutuante aparece também no build de produção/preview — mantido de propósito, já que a entrega é uma demonstração e o painel ajuda a inspecionar cache/eventos ao vivo.
+
+## Desvios do Figma
+
+O layout segue o arquivo do Figma (`challenge.md` tem o link) telas a tela, com estas divergências deliberadas:
+
+- Sem seções de blog/newsletter/banner promocional — fora de escopo por `challenge.md` §3.
+- Rodapé simplificado em uma linha, em vez do rodapé de 4 colunas do Figma.
+- Login/Cadastro são rotas reais (`/login`, `/register`) estilizadas para lembrar o modal do Figma, em vez de um overlay verdadeiro sobre a página anterior.
+- Sem filtro de "Rede" no catálogo — o modelo de dados de NFT não tem campo de rede (rede é uma propriedade da carteira/pedido, não do NFT).
+- Faixa de preço é dois campos numéricos (mín./máx.), não um slider duplo.
+- Formulário de carteira só tem os campos realmente ligados ao backend simulado (nome, endereço, rede, papel) — sem "tipo de carteira", ENS ou código de indicação fictícios.
+- Itens do menu lateral de conta fora de escopo (Atividade, Lista de interesse, Ofertas, Arquivos baixados, Suporte) e da navegação superior (Criadores, Aprenda) aparecem visualmente como no Figma, mas inertes (`aria-disabled`, sem link) — não devem aparentar uma funcionalidade que não existe.
+- Avatares de criador/usuário são iniciais geradas localmente (SVG inline) em vez de um serviço de avatar remoto — evita dependência de rede externa (melhor para Lighthouse/offline).

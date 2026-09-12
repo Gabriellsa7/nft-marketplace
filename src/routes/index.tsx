@@ -40,16 +40,26 @@ const SORT_TABS: { value: NftSortOption; label: string }[] = [
   { value: 'most-favorited', label: 'Em alta' },
 ]
 
+// The router's default URL search parser infers types from the query string, so a
+// numeric-looking value like "minPrice=999" arrives here as the number 999, not a string —
+// only on a fresh parse (direct navigation, refresh, back/forward), never on an in-app
+// navigate() called with an object. Every string field must tolerate both.
+function toStringParam(value: unknown, fallback: string): string {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' && Number.isFinite(value)) return String(value)
+  return fallback
+}
+
 export const Route = createFileRoute('/')({
   validateSearch: (raw: Record<string, unknown>): CatalogSearch => {
-    const category = typeof raw.category === 'string' ? raw.category : 'all'
-    const sort = typeof raw.sort === 'string' ? raw.sort : 'relevance'
+    const category = toStringParam(raw.category, 'all')
+    const sort = toStringParam(raw.sort, 'relevance')
     const page = Number(raw.page)
     return {
-      search: typeof raw.search === 'string' ? raw.search : '',
+      search: toStringParam(raw.search, ''),
       category: CATEGORY_OPTIONS.some((o) => o.value === category) ? (category as NftCategory) : 'all',
-      minPrice: typeof raw.minPrice === 'string' ? raw.minPrice : '',
-      maxPrice: typeof raw.maxPrice === 'string' ? raw.maxPrice : '',
+      minPrice: toStringParam(raw.minPrice, ''),
+      maxPrice: toStringParam(raw.maxPrice, ''),
       sort: ['relevance', 'recent', 'most-favorited', 'price-asc', 'price-desc'].includes(sort)
         ? (sort as NftSortOption)
         : 'relevance',
@@ -138,7 +148,12 @@ function HomePage() {
               </Button>
             </div>
             <div className="overflow-hidden rounded-2xl bg-card ring-1 ring-border">
-              <img src="/img/main-img.png" alt="" className="aspect-square w-full object-cover" />
+              <img
+                src="/img/main-img.png"
+                alt=""
+                fetchPriority="high"
+                className="aspect-square w-full object-cover"
+              />
             </div>
           </div>
         </section>

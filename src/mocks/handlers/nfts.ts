@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw'
 import { getDb } from '@/mocks/db'
 import { errorResponse } from '@/mocks/respond'
-import { simulateNetwork, MockNetworkError } from '@/mocks/scenario'
+import { getScenario, simulateNetwork, MockNetworkError } from '@/mocks/scenario'
 import type { Nft, NftCategory, NftListParams, NftSortOption, Paginated } from '@/types'
 
 const CATEGORIES: NftCategory[] = [
@@ -97,8 +97,7 @@ export const nftHandlers = [
 
     const db = getDb()
     // "empty" scenario simulates a search/filter combination with no results.
-    const scenario = url.searchParams.get('mock_scenario')
-    const source = scenario === 'empty' ? [] : db.nfts
+    const source = getScenario() === 'empty' ? [] : db.nfts
 
     const filtered = filterNfts(source, params)
     const sorted = sortNfts(filtered, params.sort ?? 'relevance')
