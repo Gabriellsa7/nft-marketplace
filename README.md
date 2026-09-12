@@ -26,10 +26,10 @@ Não há backend real: todo tráfego de rede é interceptado por um Service Work
 
 ### Resetar o cenário para o estado inicial
 
-O "banco" simulado vive em `localStorage["nft-marketplace-mock-db-v1"]`. Para voltar ao estado inicial (42 NFTs, 2 usuários demo, sem carrinho/pedidos):
+O "banco" simulado vive em `localStorage["nft-marketplace-mock-db-v2"]`. Para voltar ao estado inicial (42 NFTs, 2 usuários demo, sem carrinho/pedidos):
 
 ```js
-localStorage.removeItem('nft-marketplace-mock-db-v1')
+localStorage.removeItem('nft-marketplace-mock-db-v2')
 ```
 
 e recarregue a página — ou simplesmente abra em uma aba anônima/nova, já que cada `localStorage` é isolado por origem/perfil. Cada teste Playwright já parte disso automaticamente (contexto de navegador novo = storage vazio = reseed).

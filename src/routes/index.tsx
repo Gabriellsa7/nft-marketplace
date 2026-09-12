@@ -1,7 +1,6 @@
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
 import {
   Pagination,
   PaginationContent,
@@ -10,29 +9,21 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from '@/components/ui/pagination'
+import { NftCard } from '@/components/nft-card'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Slider } from '@/components/ui/slider'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useSessionQuery } from '@/features/auth/hooks'
 import { useFavoritesQuery, useToggleFavoriteMutation } from '@/features/favorites/hooks'
 import { useNftsQuery } from '@/features/nfts/hooks'
 import { DEFAULT_CATALOG_SEARCH, type CatalogSearch } from '@/lib/catalog-search'
-import type { Nft, NftCategory, NftSortOption } from '@/types'
-import { Link, createFileRoute, useRouterState } from '@tanstack/react-router'
-import { Heart } from 'lucide-react'
+import { CATEGORY_OPTIONS, NETWORK_OPTIONS } from '@/lib/nft-labels'
+import type { Nft, NftCategory, NftNetwork, NftSortOption } from '@/types'
+import { createFileRoute, useRouterState } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 
-const CATEGORY_OPTIONS: { value: NftCategory; label: string }[] = [
-  { value: 'art', label: 'Arte digital' },
-  { value: 'photography', label: 'Fotografia' },
-  { value: 'music', label: 'Música' },
-  { value: 'virtual-worlds', label: 'Arte 3D' },
-  { value: 'collectibles', label: 'Colecionáveis' },
-  { value: 'sports', label: 'Esportes' },
-]
-const CATEGORY_LABELS = Object.fromEntries(CATEGORY_OPTIONS.map((o) => [o.value, o.label])) as Record<
-  string,
-  string
->
+const PRICE_MIN = 0
+const PRICE_MAX = 10
 
 const SORT_TABS: { value: NftSortOption; label: string }[] = [
   { value: 'relevance', label: 'Todos os NFTs' },
@@ -49,11 +40,13 @@ function toStringParam(value: unknown, fallback: string): string {
 export const Route = createFileRoute('/')({
   validateSearch: (raw: Record<string, unknown>): CatalogSearch => {
     const category = toStringParam(raw.category, 'all')
+    const network = toStringParam(raw.network, 'all')
     const sort = toStringParam(raw.sort, 'relevance')
     const page = Number(raw.page)
     return {
       search: toStringParam(raw.search, ''),
       category: CATEGORY_OPTIONS.some((o) => o.value === category) ? (category as NftCategory) : 'all',
+      network: NETWORK_OPTIONS.some((o) => o.value === network) ? (network as NftNetwork) : 'all',
       minPrice: toStringParam(raw.minPrice, ''),
       maxPrice: toStringParam(raw.maxPrice, ''),
       sort: ['relevance', 'recent', 'most-favorited', 'price-asc', 'price-desc'].includes(sort)
@@ -90,6 +83,7 @@ function HomePage() {
   const { data, isPending, isError, isPlaceholderData, refetch } = useNftsQuery({
     search: search.search || undefined,
     category: search.category === 'all' ? undefined : search.category,
+    network: search.network === 'all' ? undefined : search.network,
     minPrice: search.minPrice || undefined,
     maxPrice: search.maxPrice || undefined,
     sort: search.sort,
@@ -118,7 +112,12 @@ function HomePage() {
   }
 
   const hasActiveFilters =
-    search.search || search.category !== 'all' || search.minPrice || search.maxPrice || search.sort !== 'relevance'
+    search.search ||
+    search.category !== 'all' ||
+    search.network !== 'all' ||
+    search.minPrice ||
+    search.maxPrice ||
+    search.sort !== 'relevance'
 
   return (
     <main className="flex flex-col gap-14 pb-16">
@@ -178,39 +177,49 @@ function HomePage() {
 
             <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
               <h2 className="text-sm font-bold">Faixa de preço</h2>
-              <div className="flex items-center gap-2">
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor="minPrice" className="text-xs text-muted-foreground">
-                    Mín. ETH
-                  </Label>
-                  <Input
-                    id="minPrice"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={priceInputs.min}
-                    onChange={(e) => setPriceInputs((p) => ({ ...p, min: e.target.value }))}
-                    className="w-full"
-                  />
-                </div>
-                <div className="flex flex-col gap-1">
-                  <Label htmlFor="maxPrice" className="text-xs text-muted-foreground">
-                    Máx. ETH
-                  </Label>
-                  <Input
-                    id="maxPrice"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={priceInputs.max}
-                    onChange={(e) => setPriceInputs((p) => ({ ...p, max: e.target.value }))}
-                    className="w-full"
-                  />
-                </div>
-              </div>
+              <p className="text-xs text-muted-foreground">
+                Preço: {priceInputs.min === '' ? PRICE_MIN.toFixed(2) : Number(priceInputs.min).toFixed(2)} -{' '}
+                {priceInputs.max === '' ? PRICE_MAX.toFixed(2) : Number(priceInputs.max).toFixed(2)} ETH
+              </p>
+              <Slider
+                aria-label="Faixa de preço em ETH"
+                min={PRICE_MIN}
+                max={PRICE_MAX}
+                step={0.1}
+                value={[
+                  priceInputs.min === '' ? PRICE_MIN : Number(priceInputs.min),
+                  priceInputs.max === '' ? PRICE_MAX : Number(priceInputs.max),
+                ]}
+                onValueChange={(value) => {
+                  const [min, max] = value as number[]
+                  setPriceInputs({ min: min.toFixed(2), max: max.toFixed(2) })
+                }}
+                className="py-1"
+              />
               <Button size="sm" variant="secondary" onClick={applyPriceRange}>
                 Aplicar
               </Button>
+            </div>
+
+            <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+              <h2 className="text-sm font-bold">Rede</h2>
+              <ul className="flex flex-col gap-2">
+                {NETWORK_OPTIONS.map((opt) => (
+                  <li key={opt.value}>
+                    <label className="group flex cursor-pointer items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
+                      <Checkbox
+                        checked={search.network === opt.value}
+                        onCheckedChange={(checked) =>
+                          navigate({
+                            search: (prev) => ({ ...prev, network: checked ? opt.value : 'all', page: 1 }),
+                          })
+                        }
+                      />
+                      {opt.label}
+                    </label>
+                  </li>
+                ))}
+              </ul>
             </div>
 
             {hasActiveFilters && (
@@ -274,42 +283,14 @@ function HomePage() {
                 className="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3"
                 aria-busy={isPlaceholderData}
               >
-                {data.items.map((nft) => {
-                  const isFavorite = favoriteIds.has(nft.id)
-                  return (
-                    <Link
-                      key={nft.id}
-                      to="/nfts/$nftId"
-                      params={{ nftId: nft.id }}
-                      className="group relative flex flex-col overflow-hidden rounded-xl bg-card ring-1 ring-border transition-shadow hover:shadow-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <div className="relative overflow-hidden bg-elevated">
-                        <img
-                          src={nft.imageUrl}
-                          alt={nft.name}
-                          width={800}
-                          height={800}
-                          loading="lazy"
-                          className="aspect-square w-full object-cover transition-transform group-hover:scale-105"
-                        />
-                        <button
-                          type="button"
-                          onClick={(e) => handleToggleFavorite(e, nft)}
-                          aria-label={isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
-                          aria-pressed={isFavorite}
-                          className="absolute top-2 right-2 flex size-8 items-center justify-center rounded-full bg-background/80 text-foreground backdrop-blur transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                        >
-                          <Heart className="size-4" fill={isFavorite ? 'currentColor' : 'none'} />
-                        </button>
-                      </div>
-                      <div className="flex flex-col gap-1 p-3">
-                        <span className="truncate text-sm font-medium">{nft.name}</span>
-                        <span className="text-xs text-muted-foreground">{CATEGORY_LABELS[nft.category]}</span>
-                        <span className="mt-1 text-sm font-bold text-accent">{nft.floorPriceEth} ETH</span>
-                      </div>
-                    </Link>
-                  )
-                })}
+                {data.items.map((nft) => (
+                  <NftCard
+                    key={nft.id}
+                    nft={nft}
+                    isFavorite={favoriteIds.has(nft.id)}
+                    onToggleFavorite={handleToggleFavorite}
+                  />
+                ))}
               </div>
             )}
 

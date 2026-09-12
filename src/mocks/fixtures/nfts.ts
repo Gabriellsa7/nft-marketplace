@@ -1,4 +1,4 @@
-import type { Nft, NftCategory } from '@/types'
+import type { Nft, NftCategory, NftNetwork, NftReview } from '@/types'
 
 const CATEGORIES: NftCategory[] = [
   'art',
@@ -7,6 +7,28 @@ const CATEGORIES: NftCategory[] = [
   'photography',
   'sports',
   'virtual-worlds',
+]
+
+const NETWORKS: NftNetwork[] = ['ethereum', 'polygon', 'solana']
+
+const ATTRIBUTE_POOL = [
+  'Óculos',
+  'Esmeralda',
+  'Raro',
+  'Dourado',
+  'Chapéu',
+  'Fones',
+  'Colar',
+  'Jaqueta',
+]
+
+const REVIEW_AUTHORS = ['Bianca Reis', 'Diego Amaral', 'Helena Cruz', 'Igor Barbosa']
+
+const REVIEW_COMMENTS = [
+  'Peça linda, chegou exatamente como no preview.',
+  'Coleção sólida, autenticidade verificada na rede sem problemas.',
+  'Metadados completos e transferência rápida entre carteiras.',
+  'Já é a segunda peça que compro desta coleção, recomendo.',
 ]
 
 const CREATORS = [
@@ -45,12 +67,37 @@ function initialsAvatar(name: string, index: number): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
 
+function contractAddress(index: number): string {
+  const hex = (index * 2654435761 % 0xffffffffff).toString(16).padStart(10, '0')
+  return `0x${hex.slice(0, 4).toUpperCase()}...${hex.slice(-4).toUpperCase()}`
+}
+
+function pickAttributes(index: number): string[] {
+  const count = 2 + (index % 3)
+  return Array.from({ length: count }, (_, i) => ATTRIBUTE_POOL[(index + i * 3) % ATTRIBUTE_POOL.length])
+}
+
+function buildReviews(index: number): NftReview[] {
+  const count = 1 + (index % REVIEW_AUTHORS.length)
+  return Array.from({ length: count }, (_, i) => {
+    const authorIndex = (index + i) % REVIEW_AUTHORS.length
+    const author = REVIEW_AUTHORS[authorIndex]
+    return {
+      author,
+      avatarUrl: initialsAvatar(author, index + i),
+      rating: 4 + (((index + i) * 7) % 2),
+      comment: REVIEW_COMMENTS[(index + i) % REVIEW_COMMENTS.length],
+    }
+  })
+}
+
 function buildNft(index: number): Nft {
   const category = CATEGORIES[index % CATEGORIES.length]
   const creator = CREATORS[index % CREATORS.length]
   const collectionName = COLLECTIONS[index % COLLECTIONS.length]
   const basePrice = 0.15 + ((index * 37) % 900) / 100
   const seed = `nft-${index}`
+  const reviews = buildReviews(index)
 
   const editionCount = (index % 3) + 1
   const editions = Array.from({ length: editionCount }, (_, editionIndex) => {
@@ -87,6 +134,14 @@ function buildNft(index: number): Nft {
     favoritesCount: (index * 13) % 500,
     createdAt: new Date(Date.now() - index * 3_600_000).toISOString(),
     version: 1,
+    network: NETWORKS[index % NETWORKS.length],
+    tokenId: `#${String(index + 1).padStart(4, '0')}`,
+    attributes: pickAttributes(index),
+    contractAddress: contractAddress(index),
+    royaltyPercent: 5,
+    rating: Number((4 + ((index * 3) % 10) / 10).toFixed(1)),
+    reviewsCount: 12 + ((index * 7) % 40),
+    reviews,
   }
 }
 

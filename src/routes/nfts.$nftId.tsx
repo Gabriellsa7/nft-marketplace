@@ -1,15 +1,18 @@
+import { NftCard } from '@/components/nft-card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useSessionQuery } from '@/features/auth/hooks'
 import { useAddCartItemMutation } from '@/features/cart/hooks'
 import { useFavoritesQuery, useToggleFavoriteMutation } from '@/features/favorites/hooks'
-import { nftDetailQueryOptions } from '@/features/nfts/hooks'
+import { nftDetailQueryOptions, useNftsQuery } from '@/features/nfts/hooks'
 import { DEFAULT_CATALOG_SEARCH } from '@/lib/catalog-search'
-import { ApiError, type NftEdition } from '@/types'
+import { NETWORK_LABELS } from '@/lib/nft-labels'
+import { ApiError, type Nft, type NftEdition } from '@/types'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { Link, createFileRoute, notFound, useNavigate, useRouterState } from '@tanstack/react-router'
-import { Heart, Minus, Plus } from 'lucide-react'
+import { Heart, Link2, Minus, Plus, Share2, Star } from 'lucide-react'
 import { useState } from 'react'
 
 export const Route = createFileRoute('/nfts/$nftId')({
@@ -57,14 +60,54 @@ function NftDetailPage() {
   const [selectedEditionId, setSelectedEditionId] = useState(nft.editions[0]?.id)
   const selectedEdition = nft.editions.find((e) => e.id === selectedEditionId) ?? nft.editions[0]
   const [addFeedback, setAddFeedback] = useState<string | null>(null)
+  const [shareFeedback, setShareFeedback] = useState<string | null>(null)
 
   const navigate = useNavigate()
   const location = useRouterState({ select: (s) => s.location })
   const { data: user } = useSessionQuery()
   const { data: favorites } = useFavoritesQuery(Boolean(user))
-  const isFavorite = favorites?.some((f) => f.id === nft.id) ?? false
+  const favoriteIds = new Set(favorites?.map((f) => f.id))
+  const isFavorite = favoriteIds.has(nft.id)
   const toggleFavoriteMutation = useToggleFavoriteMutation()
   const addCartMutation = useAddCartItemMutation()
+
+  const { data: related } = useNftsQuery({
+    collectionName: nft.collectionName,
+    excludeId: nft.id,
+    pageSize: 5,
+  })
+
+  function handleCardToggleFavorite(e: React.MouseEvent, cardNft: Nft) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!user) {
+      navigate({ to: '/login', search: { redirect: location.href } })
+      return
+    }
+    toggleFavoriteMutation.mutate({ nftId: cardNft.id, isFavorite: favoriteIds.has(cardNft.id), nft: cardNft })
+  }
+
+  async function handleShare() {
+    const shareUrl = window.location.href
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: nft.name, url: shareUrl })
+      } catch {
+        // usuário cancelou o compartilhamento nativo, nada a fazer
+      }
+      return
+    }
+    await handleCopyLink()
+  }
+
+  async function handleCopyLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      setShareFeedback('Link copiado para a área de transferência.')
+    } catch {
+      setShareFeedback('Não foi possível copiar o link.')
+    }
+  }
 
   function handleAddToCart() {
     if (!selectedEdition) return
@@ -92,6 +135,10 @@ function NftDetailPage() {
       <nav aria-label="breadcrumb" className="text-sm text-muted-foreground">
         <Link to="/" search={DEFAULT_CATALOG_SEARCH} className="hover:text-foreground hover:underline">
           Início
+        </Link>
+        <span className="mx-1.5">/</span>
+        <Link to="/" search={DEFAULT_CATALOG_SEARCH} className="hover:text-foreground hover:underline">
+          Mercado
         </Link>
         <span className="mx-1.5">/</span>
         <span className="text-foreground">{nft.name}</span>
@@ -126,10 +173,27 @@ function NftDetailPage() {
 
           <div>
             <h1 className="text-2xl font-bold text-foreground">{nft.name}</h1>
-            <p className="text-sm text-muted-foreground">{nft.collectionName}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <p className="text-sm text-muted-foreground">{nft.collectionName}</p>
+              <div className="flex items-center gap-0.5" aria-hidden="true">
+                {Array.from({ length: 5 }, (_, i) => (
+                  <Star
+                    key={i}
+                    className="size-3.5"
+                    fill={i < Math.round(nft.rating) ? 'currentColor' : 'none'}
+                  />
+                ))}
+              </div>
+              <span className="text-sm text-muted-foreground">
+                {nft.reviewsCount} avaliações de colecionadores
+              </span>
+            </div>
           </div>
 
-          <p className="text-sm leading-relaxed text-muted-foreground">{nft.description}</p>
+          <div className="flex flex-col gap-1">
+            <span className="text-sm font-bold">Sobre este NFT:</span>
+            <p className="text-sm leading-relaxed text-muted-foreground">{nft.description}</p>
+          </div>
 
           <div className="flex flex-col gap-2">
             <span className="text-sm font-bold">Edição</span>
@@ -214,6 +278,7 @@ function NftDetailPage() {
                 <Button
                   variant="outline"
                   size="icon"
+                  data-testid="nft-favorite-button"
                   aria-label={isFavorite ? 'Remover dos favoritos' : 'Adicionar aos favoritos'}
                   aria-pressed={isFavorite}
                   disabled={toggleFavoriteMutation.isPending}
@@ -230,8 +295,86 @@ function NftDetailPage() {
               )}
             </div>
           )}
+
+          <div className="flex flex-col gap-2 border-t border-border pt-4 text-sm text-muted-foreground">
+            <p>ID do token: {nft.tokenId}</p>
+            <p>Coleção: {nft.collectionName}</p>
+            <p>Atributos: {nft.attributes.join(', ')}</p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm text-muted-foreground">Compartilhar este NFT:</span>
+            <Button variant="outline" size="icon-sm" aria-label="Compartilhar" onClick={handleShare}>
+              <Share2 />
+            </Button>
+            <Button variant="outline" size="icon-sm" aria-label="Copiar link" onClick={handleCopyLink}>
+              <Link2 />
+            </Button>
+          </div>
+          {shareFeedback && (
+            <p role="status" className="text-sm text-muted-foreground">
+              {shareFeedback}
+            </p>
+          )}
         </div>
       </div>
+
+      <Tabs defaultValue="details" className="flex flex-col gap-4">
+        <div className="min-w-0 overflow-x-auto">
+          <TabsList variant="line" className="w-max max-w-full">
+            <TabsTrigger value="details">Detalhes do NFT</TabsTrigger>
+            <TabsTrigger value="reviews">Avaliações de colecionadores ({nft.reviewsCount})</TabsTrigger>
+          </TabsList>
+        </div>
+        <TabsContent value="details" className="flex flex-col gap-2 text-sm text-muted-foreground">
+          <p>
+            <span className="font-semibold text-foreground">Rede:</span> {NETWORK_LABELS[nft.network]}, com
+            procedência imutável e metadados armazenados no IPFS.
+          </p>
+          <p>
+            <span className="font-semibold text-foreground">Contrato:</span> {nft.contractAddress} • Contrato
+            inteligente ERC-721 verificado.
+          </p>
+          <p>
+            <span className="font-semibold text-foreground">Direitos autorais:</span> {nft.royaltyPercent}% em vendas
+            secundárias, pagos automaticamente pelos marketplaces suportados.
+          </p>
+        </TabsContent>
+        <TabsContent value="reviews" className="flex flex-col gap-4">
+          {nft.reviews.map((review, i) => (
+            <div key={i} className="flex gap-3 border-b border-border pb-4 last:border-none">
+              <img src={review.avatarUrl} alt="" className="size-9 shrink-0 rounded-full" />
+              <div className="flex flex-col gap-1">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">{review.author}</span>
+                  <div className="flex items-center gap-0.5" aria-hidden="true">
+                    {Array.from({ length: 5 }, (_, starIndex) => (
+                      <Star key={starIndex} className="size-3" fill={starIndex < review.rating ? 'currentColor' : 'none'} />
+                    ))}
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">{review.comment}</p>
+              </div>
+            </div>
+          ))}
+        </TabsContent>
+      </Tabs>
+
+      {related && related.items.length > 0 && (
+        <div className="flex flex-col gap-4">
+          <h2 className="border-b border-border pb-3 text-sm font-bold">Mais desta coleção</h2>
+          <div className="grid grid-cols-2 gap-5 sm:grid-cols-3 lg:grid-cols-5">
+            {related.items.map((relatedNft) => (
+              <NftCard
+                key={relatedNft.id}
+                nft={relatedNft}
+                isFavorite={favoriteIds.has(relatedNft.id)}
+                onToggleFavorite={handleCardToggleFavorite}
+              />
+            ))}
+          </div>
+        </div>
+      )}
     </main>
   )
 }

@@ -1,5 +1,6 @@
 import { Footer } from '@/components/layout/footer'
 import { Header } from '@/components/layout/header'
+import { MobileTabBar } from '@/components/layout/mobile-tab-bar'
 import { useRealtimeSync } from '@/features/realtime/hooks'
 import { UNAUTHORIZED_EVENT } from '@/lib/api-client'
 import type { QueryClient } from '@tanstack/react-query'
@@ -41,10 +42,11 @@ function RootComponent() {
   return (
     <div className="flex min-h-svh flex-col">
       <Header />
-      <div className="flex flex-1 flex-col">
+      <div className="flex flex-1 flex-col pb-16 md:pb-0">
         <Outlet />
       </div>
       <Footer />
+      <MobileTabBar />
     </div>
   )
 }

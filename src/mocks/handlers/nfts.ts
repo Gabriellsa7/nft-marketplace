@@ -2,7 +2,7 @@ import { http, HttpResponse } from 'msw'
 import { getDb } from '@/mocks/db'
 import { errorResponse } from '@/mocks/respond'
 import { getScenario, simulateNetwork, MockNetworkError } from '@/mocks/scenario'
-import type { Nft, NftCategory, NftListParams, NftSortOption, Paginated } from '@/types'
+import type { Nft, NftCategory, NftListParams, NftNetwork, NftSortOption, Paginated } from '@/types'
 
 const CATEGORIES: NftCategory[] = [
   'art',
@@ -12,6 +12,8 @@ const CATEGORIES: NftCategory[] = [
   'sports',
   'virtual-worlds',
 ]
+
+const NETWORKS: NftNetwork[] = ['ethereum', 'polygon', 'solana']
 
 const SORTS: NftSortOption[] = ['relevance', 'price-asc', 'price-desc', 'recent', 'most-favorited']
 
@@ -25,6 +27,17 @@ function parseListParams(url: URL): NftListParams {
   if (category && CATEGORIES.includes(category as NftCategory)) {
     params.category = category as NftCategory
   }
+
+  const network = url.searchParams.get('network')
+  if (network && NETWORKS.includes(network as NftNetwork)) {
+    params.network = network as NftNetwork
+  }
+
+  const collectionName = url.searchParams.get('collectionName')
+  if (collectionName && collectionName.trim()) params.collectionName = collectionName.trim()
+
+  const excludeId = url.searchParams.get('excludeId')
+  if (excludeId && excludeId.trim()) params.excludeId = excludeId.trim()
 
   const minPrice = url.searchParams.get('minPrice')
   if (minPrice && !Number.isNaN(Number(minPrice))) params.minPrice = minPrice
@@ -58,6 +71,9 @@ function filterNfts(nfts: Nft[], params: NftListParams): Nft[] {
   return nfts.filter((nft) => {
     if (params.search && !matchesSearch(nft, params.search)) return false
     if (params.category && nft.category !== params.category) return false
+    if (params.network && nft.network !== params.network) return false
+    if (params.collectionName && nft.collectionName !== params.collectionName) return false
+    if (params.excludeId && nft.id === params.excludeId) return false
     if (params.minPrice && Number(nft.floorPriceEth) < Number(params.minPrice)) return false
     if (params.maxPrice && Number(nft.floorPriceEth) > Number(params.maxPrice)) return false
     return true

@@ -35,7 +35,7 @@ export interface MockDb {
   idempotency: Record<string, { orderId: string; requestHash: string }>
 }
 
-const STORAGE_KEY = 'nft-marketplace-mock-db-v1'
+const STORAGE_KEY = 'nft-marketplace-mock-db-v2'
 
 function seedDb(): MockDb {
   return {

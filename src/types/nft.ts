@@ -6,6 +6,8 @@ export type NftCategory =
   | 'sports'
   | 'virtual-worlds'
 
+export type NftNetwork = 'ethereum' | 'polygon' | 'solana'
+
 export interface NftEdition {
   id: string
   name: string
@@ -19,6 +21,13 @@ export interface NftCreator {
   name: string
   avatarUrl: string
   verified: boolean
+}
+
+export interface NftReview {
+  author: string
+  avatarUrl: string
+  rating: number
+  comment: string
 }
 
 export interface Nft {
@@ -36,6 +45,14 @@ export interface Nft {
   favoritesCount: number
   createdAt: string
   version: number
+  network: NftNetwork
+  tokenId: string
+  attributes: string[]
+  contractAddress: string
+  royaltyPercent: number
+  rating: number
+  reviewsCount: number
+  reviews: NftReview[]
 }
 
 export type NftSortOption =
@@ -48,11 +65,14 @@ export type NftSortOption =
 export interface NftListParams {
   search?: string
   category?: NftCategory
+  network?: NftNetwork
   minPrice?: string
   maxPrice?: string
   sort?: NftSortOption
   page?: number
   pageSize?: number
+  collectionName?: string
+  excludeId?: string
 }
 
 export interface Paginated<T> {
