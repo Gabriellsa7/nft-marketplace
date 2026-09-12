@@ -2,7 +2,6 @@ import { getDb, persistDb } from '@/mocks/db'
 import { broadcastNftUpdated } from '@/mocks/socket-server'
 import type { Nft, RealtimeEnvelope } from '@/types'
 
-/** Applies a mutation to an NFT, bumps its version, persists, and broadcasts nft.updated. */
 export function bumpAndBroadcastNft(nftId: string, mutate: (nft: Nft) => void): void {
   const db = getDb()
   const nft = db.nfts.find((n) => n.id === nftId)
@@ -30,7 +29,6 @@ function recomputeFloorPrice(nft: Nft): void {
 
 let ambientTimer: ReturnType<typeof setInterval> | null = null
 
-/** Periodically drifts a random NFT's price/availability, simulating a live marketplace. */
 export function startAmbientNftDrift(): void {
   if (ambientTimer) return
   ambientTimer = setInterval(() => {

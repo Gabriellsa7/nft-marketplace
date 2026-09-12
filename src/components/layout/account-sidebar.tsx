@@ -8,7 +8,6 @@ const NAV_ITEMS = [
   { label: 'Carteiras', to: '/wallets' as const, icon: CreditCard },
 ]
 
-/** Items present in the Figma sidebar with no backing feature — out of scope per challenge.md §3. */
 const INERT_ITEMS = ['Atividade', 'Lista de interesse', 'Ofertas', 'Arquivos baixados', 'Suporte']
 
 export function AccountSidebar() {

@@ -96,7 +96,6 @@ export const nftHandlers = [
     }
 
     const db = getDb()
-    // "empty" scenario simulates a search/filter combination with no results.
     const source = getScenario() === 'empty' ? [] : db.nfts
 
     const filtered = filterNfts(source, params)

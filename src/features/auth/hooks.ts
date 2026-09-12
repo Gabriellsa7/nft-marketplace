@@ -16,7 +16,6 @@ export function useSessionQuery() {
   return useQuery(sessionQueryOptions())
 }
 
-/** Clears every query scoped to the previous session; keeps public catalog data cached. */
 function clearPrivateCaches(queryClient: ReturnType<typeof useQueryClient>) {
   for (const key of ['cart', 'favorites', 'orders', 'profile', 'wallets']) {
     queryClient.removeQueries({ queryKey: [key] })

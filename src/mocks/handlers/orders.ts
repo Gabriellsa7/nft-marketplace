@@ -46,15 +46,6 @@ async function hashRequestBody(input: CreateOrderInput): Promise<string> {
     .join('')
 }
 
-/**
- * Settles a pending order as confirmed or declined, simulating the on-chain outcome, and
- * broadcasts the transition over the mock Socket.IO channel (order.updated) — REST polling
- * on GET /api/orders/:id remains as a fallback for reconnect/refresh recovery.
- *
- * Stock is only decremented and cart items only removed on confirmation — a declined order
- * must leave the catalog and the collector's cart exactly as they were (see the "itens
- * continuam disponíveis" copy on the declined confirmation screen).
- */
 function resolveOrder(orderId: string, status: 'confirmed' | 'declined') {
   const db = getDb()
   const order = db.orders.find((o) => o.id === orderId)
@@ -107,10 +98,8 @@ function resolveOrder(orderId: string, status: 'confirmed' | 'declined') {
   emitOrderUpdated(order.userId, envelope)
 }
 
-/** Resolves a pending order after a delay, simulating on-chain confirmation latency. */
 function scheduleOrderResolution(orderId: string) {
   setTimeout(() => {
-    // Deterministic-ish outcome so demos stay mostly successful; declines are rare.
     const declined = Math.random() < 0.08
     resolveOrder(orderId, declined ? 'declined' : 'confirmed')
   }, ORDER_RESOLUTION_DELAY_MS)
@@ -180,8 +169,6 @@ export const orderHandlers = [
         })
       }
 
-      // Stock isn't decremented and cart items aren't removed until the order actually
-      // confirms (see resolveOrder) — a pending/declined order must not affect either.
       const now = new Date().toISOString()
       const order: StoredOrder = {
         id: `order-${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`,
@@ -231,9 +218,6 @@ export const orderHandlers = [
     }
   }),
 
-  // Test-only utility (mirrors /api/nfts/:id/_simulate-update) to deterministically resolve a
-  // pending order instead of waiting on the randomized confirm/decline timer — avoids flaky
-  // Playwright runs on the "compra completa"/"falha de pagamento" scenarios.
   http.post('/api/orders/:id/_resolve', async ({ request, params }) => {
     try {
       const session = requireSession(request)

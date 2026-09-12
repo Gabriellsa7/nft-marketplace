@@ -29,8 +29,6 @@ apiClient.interceptors.response.use(
       }
       const apiError = new ApiError(error.response.status, body)
 
-      // The session-check endpoint reports "no session" via a null result, not this event —
-      // otherwise anonymous browsing would trigger a redirect on every app load.
       if (apiError.code === 'unauthenticated' && !error.config?.url?.includes('/auth/session')) {
         window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT))
       }

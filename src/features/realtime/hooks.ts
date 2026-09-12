@@ -5,10 +5,6 @@ import type { Nft, Order, RealtimeEnvelope } from '@/types'
 import { useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
-/**
- * Keeps the Socket.IO connection identified with the current session and applies
- * nft.updated/order.updated events to the query cache. Mounted once at the app root.
- */
 export function useRealtimeSync() {
   const queryClient = useQueryClient()
   const { data: user } = useSessionQuery()
@@ -23,7 +19,6 @@ export function useRealtimeSync() {
 
       function handleConnect() {
         socket.emit('identify', getAuthToken())
-        // Reconcile with REST after every (re)connect — covers dropped-connection recovery.
         queryClient.invalidateQueries({ queryKey: ['nfts'] })
         queryClient.invalidateQueries({ queryKey: ['cart'] })
         queryClient.invalidateQueries({ queryKey: ['quote'] })
@@ -33,7 +28,6 @@ export function useRealtimeSync() {
       function handleNftUpdated(envelope: RealtimeEnvelope<Nft>) {
         const detailKey = ['nfts', 'detail', envelope.resourceId]
         const cached = queryClient.getQueryData<Nft>(detailKey)
-        // Tolerate duplicate/out-of-order delivery: never regress a newer cached version.
         if (!cached || envelope.version > cached.version) {
           queryClient.setQueryData(detailKey, envelope.resource)
         }
@@ -54,9 +48,6 @@ export function useRealtimeSync() {
       socket.on('nft.updated', handleNftUpdated)
       socket.on('order.updated', handleOrderUpdated)
 
-      // Reconnecting (rather than relying on an existing connection) re-runs the
-      // handshake so `identify` always reflects the *current* userId — this is what
-      // stops a previous session's order.updated events from reaching the next user.
       if (socket.connected) socket.disconnect()
       socket.connect()
 

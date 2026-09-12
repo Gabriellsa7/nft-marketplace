@@ -1,9 +1,3 @@
-/**
- * Simplified footer — the Figma file's footer includes editorial/help-center/blog
- * columns that are explicitly out of scope for this challenge (see challenge.md §3).
- * Kept the brand block and copyright for visual completeness; dropped the rest rather
- * than link to pages that don't exist.
- */
 export function Footer() {
   return (
     <footer className="mt-auto border-t border-border bg-card">

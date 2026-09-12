@@ -25,7 +25,6 @@ function getCart(cartOwner: string): Cart {
   return db.carts[cartOwner] ?? { items: [], updatedAt: new Date(0).toISOString() }
 }
 
-/** Re-syncs each cart item against the live catalog, flagging price/availability drift. */
 function refreshCart(cartOwner: string): Cart {
   const db = getDb()
   const cart = getCart(cartOwner)
@@ -34,7 +33,7 @@ function refreshCart(cartOwner: string): Cart {
   for (const item of cart.items) {
     const nft = db.nfts.find((n) => n.id === item.nftId)
     const edition = findEdition(nft, item.editionId)
-    if (!nft || !edition) continue // item's edition no longer exists; drop it silently
+    if (!nft || !edition) continue
 
     items.push({
       ...item,
@@ -185,7 +184,6 @@ export const cartHandlers = [
     }
   }),
 
-  // Merges a visitor's cart into the authenticated user's cart right after login.
   http.post('/api/cart/merge', async ({ request }) => {
     try {
       const cartOwner = resolveCartOwner(request)

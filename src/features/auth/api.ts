@@ -17,7 +17,6 @@ export async function register(input: RegisterInput): Promise<AuthResponse> {
   return data
 }
 
-/** Resolves to null (not an error) when there's simply no active session. */
 export async function fetchSession(): Promise<User | null> {
   try {
     const { data } = await apiClient.get<{ user: User }>('/auth/session')

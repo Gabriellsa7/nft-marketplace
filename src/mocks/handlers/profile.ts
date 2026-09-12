@@ -95,7 +95,6 @@ export const profileHandlers = [
       }
 
       record.passwordHash = mockHashPassword(input.newPassword)
-      // Changing the password invalidates other sessions for this account.
       db.sessions = db.sessions.filter((s) => s.token === session.token)
       persistDb()
       return HttpResponse.json({ ok: true })

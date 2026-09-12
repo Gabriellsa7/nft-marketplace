@@ -138,7 +138,6 @@ export const authHandlers = [
     }
   }),
 
-  // Test-only utility to deterministically reproduce session expiration scenarios.
   http.post('/api/auth/_expire', async ({ request }) => {
     const session = requireSession(request)
     session.expiresAt = Date.now() - 1000

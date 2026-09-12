@@ -8,10 +8,6 @@ export interface SeedUser {
   favoriteNftIds: string[]
 }
 
-/**
- * Fixed credentials for the two demo collectors — documented in README.
- * ana@demo.nft / demo1234 and bruno@demo.nft / demo1234
- */
 export function createUserFixtures(): SeedUser[] {
   return [
     {

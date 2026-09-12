@@ -9,7 +9,6 @@ export interface CatalogSearch {
   page: number
 }
 
-/** Default/reset catalog search — reused by every Link back to "/" outside the catalog route itself. */
 export const DEFAULT_CATALOG_SEARCH: CatalogSearch = {
   search: '',
   category: 'all',

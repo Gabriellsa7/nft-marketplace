@@ -40,10 +40,6 @@ const SORT_TABS: { value: NftSortOption; label: string }[] = [
   { value: 'most-favorited', label: 'Em alta' },
 ]
 
-// The router's default URL search parser infers types from the query string, so a
-// numeric-looking value like "minPrice=999" arrives here as the number 999, not a string —
-// only on a fresh parse (direct navigation, refresh, back/forward), never on an in-app
-// navigate() called with an object. Every string field must tolerate both.
 function toStringParam(value: unknown, fallback: string): string {
   if (typeof value === 'string') return value
   if (typeof value === 'number' && Number.isFinite(value)) return String(value)
@@ -126,7 +122,6 @@ function HomePage() {
 
   return (
     <main className="flex flex-col gap-14 pb-16">
-        {/* Hero */}
         <section className="mx-auto w-full max-w-360 px-5 pt-8 sm:px-8">
           <div className="grid grid-cols-1 items-center gap-10 lg:grid-cols-2">
             <div className="flex flex-col gap-5">
@@ -158,7 +153,6 @@ function HomePage() {
           </div>
         </section>
 
-        {/* Catalog */}
         <section id="catalogo" className="mx-auto grid w-full max-w-360 grid-cols-1 gap-8 px-5 sm:px-8 lg:grid-cols-[280px_1fr]">
           <aside className="flex flex-col gap-8">
             <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">

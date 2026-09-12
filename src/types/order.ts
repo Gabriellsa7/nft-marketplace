@@ -10,7 +10,6 @@ export interface OrderItem {
   unitPriceEth: string
 }
 
-/** Immutable snapshot taken at order creation; later catalog changes must never mutate it. */
 export interface Order {
   id: string
   status: OrderStatus
@@ -25,7 +24,6 @@ export interface Order {
   transactionRef: string | null
   createdAt: string
   updatedAt: string
-  /** Bumped on every status transition; realtime order.updated events carry it to detect staleness. */
   version: number
 }
 

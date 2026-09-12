@@ -3,10 +3,6 @@ import { bumpAndBroadcastNft } from '@/mocks/realtime-simulation'
 import { errorResponse } from '@/mocks/respond'
 import { http, HttpResponse } from 'msw'
 
-/**
- * Test-only utility (mirrors /api/auth/_expire) to deterministically trigger an
- * nft.updated event from Playwright, instead of waiting on the ambient drift timer.
- */
 export const realtimeTestHandlers = [
   http.post('/api/nfts/:id/_simulate-update', async ({ request, params }) => {
     const db = getDb()

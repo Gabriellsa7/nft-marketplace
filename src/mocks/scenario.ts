@@ -14,7 +14,6 @@ export function getScenario(): MockScenario {
     const stored = localStorage.getItem(STORAGE_KEY)
     if (stored && VALID.includes(stored as MockScenario)) return stored as MockScenario
   } catch {
-    // ignore, default below
   }
   return 'default'
 }
@@ -23,11 +22,9 @@ export function setScenario(scenario: MockScenario) {
   try {
     localStorage.setItem(STORAGE_KEY, scenario)
   } catch {
-    // ignore
   }
 }
 
-/** Deterministic pseudo-random in [0,1) seeded by a string, so scenarios stay reproducible per request. */
 function seededRandom(seed: string): number {
   let hash = 0
   for (let i = 0; i < seed.length; i++) {
@@ -42,10 +39,6 @@ export class MockNetworkError extends Error {
   }
 }
 
-/**
- * Applies the current scenario's latency/failure behavior before a handler resolves.
- * `key` seeds determinism (e.g. request url + method) so retries in tests are reproducible.
- */
 export async function simulateNetwork(key: string): Promise<void> {
   const scenario = getScenario()
   const roll = seededRandom(key)

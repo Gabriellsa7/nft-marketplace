@@ -9,11 +9,8 @@ export type NftCategory =
 export interface NftEdition {
   id: string
   name: string
-  /** Decimal string in ETH, e.g. "1.2500" — never a float. */
   priceEth: string
-  /** Remaining supply for this edition. */
   available: number
-  /** Total minted supply for this edition. */
   supply: number
 }
 
@@ -35,11 +32,9 @@ export interface Nft {
   creator: NftCreator
   collectionName: string
   editions: NftEdition[]
-  /** Lowest priceEth across editions, decimal string, for catalog sorting/display. */
   floorPriceEth: string
   favoritesCount: number
   createdAt: string
-  /** Monotonic version bumped by nft.updated events; used to discard stale realtime events. */
   version: number
 }
 

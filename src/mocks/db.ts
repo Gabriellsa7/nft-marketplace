@@ -8,7 +8,6 @@ export interface Session {
   expiresAt: number
 }
 
-/** Server-side quote snapshot; only its public fields are echoed back in the Quote response. */
 export interface StoredQuote {
   quoteVersion: string
   cartOwner: string
@@ -21,7 +20,6 @@ export interface StoredQuote {
   expiresAt: string
 }
 
-/** Order carries an owning user internally; the public Order type never exposes it. */
 export interface StoredOrder extends Order {
   userId: string
 }
@@ -62,7 +60,6 @@ function loadOrSeed(): MockDb {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) return JSON.parse(raw) as MockDb
   } catch {
-    // ignore corrupt storage, fall back to a fresh seed
   }
   return seedDb()
 }
@@ -71,7 +68,6 @@ export function persistDb() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(db))
   } catch {
-    // storage unavailable (private mode, quota) — mocks still work in-memory
   }
 }
 

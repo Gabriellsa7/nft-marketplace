@@ -37,7 +37,6 @@ function clearIdempotencyKey() {
   try {
     sessionStorage.removeItem(IDEMPOTENCY_KEY_STORAGE)
   } catch {
-    // ignore
   }
 }
 

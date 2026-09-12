@@ -25,7 +25,6 @@ const COLLECTIONS = [
   'Ghost Circuit',
 ]
 
-/** Local artwork exported from the Figma file — cycled across fixtures instead of a remote placeholder service. */
 const ARTWORKS = ['/img/nft01.png', '/img/nft02.png', '/img/nft03.png']
 
 function seededImage(index: number) {
@@ -34,7 +33,6 @@ function seededImage(index: number) {
 
 const AVATAR_COLORS = ['#d28a4c', '#b39463', '#e89b55', '#55321f']
 
-/** Local initials avatar (data URI) — avoids a remote avatar service for offline/Lighthouse friendliness. */
 function initialsAvatar(name: string, index: number): string {
   const initials = name
     .split(' ')

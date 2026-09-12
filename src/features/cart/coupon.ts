@@ -2,7 +2,6 @@ import { useState } from 'react'
 
 const COUPON_STORAGE_KEY = 'nft-marketplace-coupon'
 
-/** Applied coupon persisted for the duration of the tab session (cart + checkout share it). */
 export function useAppliedCoupon() {
   const [appliedCoupon, setAppliedCouponState] = useState<string | undefined>(() => {
     try {
@@ -18,7 +17,6 @@ export function useAppliedCoupon() {
       if (coupon) sessionStorage.setItem(COUPON_STORAGE_KEY, coupon)
       else sessionStorage.removeItem(COUPON_STORAGE_KEY)
     } catch {
-      // ignore
     }
   }
 
