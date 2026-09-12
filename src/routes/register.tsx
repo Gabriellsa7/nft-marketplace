@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useRegisterMutation } from '@/features/auth/hooks'
+import { DEFAULT_CATALOG_SEARCH } from '@/lib/catalog-search'
 import { ApiError } from '@/types'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
@@ -41,7 +42,7 @@ function RegisterPage() {
     registerMutation.mutate(
       { name: values.name, email: values.email, password: values.password },
       {
-        onSuccess: () => navigate({ to: '/' }),
+        onSuccess: () => navigate({ to: '/', search: DEFAULT_CATALOG_SEARCH }),
         onError: (err) => {
           if (err instanceof ApiError && err.fields) {
             for (const field of err.fields) {
@@ -61,18 +62,23 @@ function RegisterPage() {
       : null
 
   return (
-    <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 px-4 py-16">
-      <div className="flex flex-col gap-1 text-center">
-        <h1 className="text-xl font-semibold text-foreground">Criar conta</h1>
-        <p className="text-sm text-muted-foreground">Cadastre-se para comprar e favoritar NFTs.</p>
-      </div>
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-16 sm:px-8">
+      <div className="overflow-hidden rounded-2xl border-t-2 border-accent bg-card ring-1 ring-border">
+        <div className="flex flex-col gap-4 p-6">
+          <nav className="flex items-center gap-4 text-sm">
+            <Link to="/login" className="pb-1 text-muted-foreground hover:text-foreground">
+              Entrar
+            </Link>
+            <span className="border-b-2 border-accent pb-1 font-bold text-foreground">Criar conta</span>
+          </nav>
+          <p className="text-sm text-muted-foreground">Cadastre-se para comprar e favoritar NFTs.</p>
 
-      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
-        {topLevelError && (
-          <Alert variant="destructive">
-            <AlertDescription>{topLevelError}</AlertDescription>
-          </Alert>
-        )}
+          <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+            {topLevelError && (
+              <Alert variant="destructive">
+                <AlertDescription>{topLevelError}</AlertDescription>
+              </Alert>
+            )}
 
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="name">Nome</Label>
@@ -141,17 +147,12 @@ function RegisterPage() {
           )}
         </div>
 
-        <Button type="submit" disabled={registerMutation.isPending} className="mt-2">
-          {registerMutation.isPending ? 'Criando conta…' : 'Criar conta'}
-        </Button>
-      </form>
-
-      <p className="text-center text-sm text-muted-foreground">
-        Já tem conta?{' '}
-        <Link to="/login" className="text-foreground underline underline-offset-4">
-          Entrar
-        </Link>
-      </p>
+            <Button type="submit" disabled={registerMutation.isPending} className="mt-2">
+              {registerMutation.isPending ? 'Criando conta…' : 'Criar conta'}
+            </Button>
+          </form>
+        </div>
+      </div>
     </main>
   )
 }

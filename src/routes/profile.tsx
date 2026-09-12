@@ -1,3 +1,4 @@
+import { AccountSidebar } from '@/components/layout/account-sidebar'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -5,7 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useChangePasswordMutation, useProfileQuery, useUpdateProfileMutation } from '@/features/profile/hooks'
 import { requireAuthBeforeLoad } from '@/lib/route-guards'
-import { ApiError, type ChangePasswordInput, type UpdateProfileInput } from '@/types'
+import { ApiError, type ChangePasswordInput } from '@/types'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -17,6 +18,8 @@ const profileSchema = z.object({
   email: z.string().min(1, 'Informe seu e-mail.').email('Informe um e-mail válido.'),
   avatarUrl: z.string().url('Informe uma URL válida.').or(z.literal('')),
 })
+
+type ProfileFormValues = z.infer<typeof profileSchema>
 
 const passwordSchema = z
   .object({
@@ -38,14 +41,17 @@ function ProfilePage() {
   const { data: user, isPending } = useProfileQuery()
 
   return (
-    <main className="mx-auto flex w-full max-w-lg flex-col gap-10 px-4 py-8 sm:px-6">
-      <h1 className="text-2xl font-semibold text-foreground">Perfil</h1>
-      {isPending || !user ? null : (
-        <>
-          <ProfileForm user={user} />
-          <PasswordForm />
-        </>
-      )}
+    <main className="mx-auto flex w-full max-w-360 flex-col gap-8 px-5 py-8 sm:flex-row sm:px-8">
+      <AccountSidebar />
+      <div className="flex w-full max-w-2xl flex-col gap-10">
+        <h1 className="text-xl font-bold text-foreground">Perfil do colecionador</h1>
+        {isPending || !user ? null : (
+          <>
+            <ProfileForm user={user} />
+            <PasswordForm />
+          </>
+        )}
+      </div>
     </main>
   )
 }
@@ -59,7 +65,7 @@ function ProfileForm({ user }: { user: { name: string; email: string; avatarUrl:
     watch,
     setError,
     formState: { errors },
-  } = useForm<UpdateProfileInput>({
+  } = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),
     defaultValues: { name: user.name, email: user.email, avatarUrl: user.avatarUrl ?? '' },
   })

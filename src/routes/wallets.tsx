@@ -1,3 +1,4 @@
+import { AccountSidebar } from '@/components/layout/account-sidebar'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -40,65 +41,71 @@ function WalletsPage() {
   const [dialogWallet, setDialogWallet] = useState<Wallet | 'new' | null>(null)
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-foreground">Carteiras</h1>
-        <Dialog open={dialogWallet !== null} onOpenChange={(open) => !open && setDialogWallet(null)}>
-          <DialogTrigger render={<Button onClick={() => setDialogWallet('new')} />}>
-            Nova carteira
-          </DialogTrigger>
-          {dialogWallet && (
-            <WalletDialogContent
-              wallet={dialogWallet === 'new' ? null : dialogWallet}
-              onDone={() => setDialogWallet(null)}
-            />
-          )}
-        </Dialog>
-      </div>
-
-      {isPending && (
-        <div className="flex flex-col gap-3">
-          <Skeleton className="h-20 w-full rounded-xl" />
-          <Skeleton className="h-20 w-full rounded-xl" />
+    <main className="mx-auto flex w-full max-w-360 flex-col gap-8 px-5 py-8 sm:flex-row sm:px-8">
+      <AccountSidebar />
+      <div className="flex w-full max-w-2xl flex-col gap-6">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-foreground">Carteiras</h1>
+          <Dialog open={dialogWallet !== null} onOpenChange={(open) => !open && setDialogWallet(null)}>
+            <DialogTrigger render={<Button onClick={() => setDialogWallet('new')} />}>
+              Adicionar
+            </DialogTrigger>
+            {dialogWallet && (
+              <WalletDialogContent
+                wallet={dialogWallet === 'new' ? null : dialogWallet}
+                onDone={() => setDialogWallet(null)}
+              />
+            )}
+          </Dialog>
         </div>
-      )}
 
-      {isError && (
-        <div className="flex flex-col items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
-          <p>Não foi possível carregar suas carteiras.</p>
-          <Button variant="outline" size="sm" onClick={() => refetch()}>
-            Tentar novamente
-          </Button>
-        </div>
-      )}
+        {isPending && (
+          <div className="flex flex-col gap-3">
+            <Skeleton className="h-20 w-full rounded-xl" />
+            <Skeleton className="h-20 w-full rounded-xl" />
+          </div>
+        )}
 
-      {wallets && wallets.length === 0 && (
-        <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed p-12 text-center text-muted-foreground">
-          <p>Nenhuma carteira cadastrada.</p>
-        </div>
-      )}
+        {isError && (
+          <div className="flex flex-col items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive">
+            <p>Não foi possível carregar suas carteiras.</p>
+            <Button variant="outline" size="sm" onClick={() => refetch()}>
+              Tentar novamente
+            </Button>
+          </div>
+        )}
 
-      {wallets && wallets.length > 0 && (
-        <ul className="flex flex-col gap-3">
-          {wallets.map((wallet) => (
-            <li key={wallet.id} className="flex items-center justify-between gap-3 rounded-xl border p-4">
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium">{wallet.label}</span>
-                  <Badge variant={wallet.role === 'primary' ? 'default' : 'outline'}>
-                    {wallet.role === 'primary' ? 'Principal' : 'Secundária'}
-                  </Badge>
-                  <Badge variant="secondary">{NETWORK_LABELS[wallet.network]}</Badge>
+        {wallets && wallets.length === 0 && (
+          <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed border-border p-12 text-center text-muted-foreground">
+            <p>Nenhuma carteira cadastrada.</p>
+          </div>
+        )}
+
+        {wallets && wallets.length > 0 && (
+          <ul className="flex flex-col gap-3">
+            {wallets.map((wallet) => (
+              <li
+                key={wallet.id}
+                className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-4"
+              >
+                <div className="flex flex-col gap-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium">{wallet.label}</span>
+                    <Badge variant={wallet.role === 'primary' ? 'default' : 'outline'}>
+                      {wallet.role === 'primary' ? 'Principal' : 'Secundária'}
+                    </Badge>
+                    <Badge variant="secondary">{NETWORK_LABELS[wallet.network]}</Badge>
+                  </div>
+                  <span className="font-mono text-xs text-muted-foreground">{wallet.address}</span>
                 </div>
-                <span className="font-mono text-xs text-muted-foreground">{wallet.address}</span>
-              </div>
-              <Button variant="outline" size="sm" onClick={() => setDialogWallet(wallet)}>
-                Editar
-              </Button>
-            </li>
-          ))}
-        </ul>
-      )}
+                <Button variant="outline" size="sm" onClick={() => setDialogWallet(wallet)}>
+                  Editar
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </main>
   )
 }

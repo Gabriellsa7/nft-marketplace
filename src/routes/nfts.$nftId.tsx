@@ -5,9 +5,11 @@ import { useSessionQuery } from '@/features/auth/hooks'
 import { useAddCartItemMutation } from '@/features/cart/hooks'
 import { useFavoritesQuery, useToggleFavoriteMutation } from '@/features/favorites/hooks'
 import { nftDetailQueryOptions } from '@/features/nfts/hooks'
+import { DEFAULT_CATALOG_SEARCH } from '@/lib/catalog-search'
 import { ApiError, type NftEdition } from '@/types'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { Link, createFileRoute, notFound, useNavigate, useRouterState } from '@tanstack/react-router'
+import { Heart, Minus, Plus } from 'lucide-react'
 import { useState } from 'react'
 
 export const Route = createFileRoute('/nfts/$nftId')({
@@ -29,13 +31,17 @@ export const Route = createFileRoute('/nfts/$nftId')({
       <p className="text-sm text-muted-foreground">
         Este item pode ter sido removido ou o link está incorreto.
       </p>
-      <Button nativeButton={false} render={<Link to="/">Voltar ao catálogo</Link>} />
+      <Button nativeButton={false} render={<Link to="/" search={DEFAULT_CATALOG_SEARCH} />}>
+        Voltar ao catálogo
+      </Button>
     </main>
   ),
   errorComponent: ({ error, reset }) => (
     <main className="mx-auto flex max-w-2xl flex-col items-center gap-4 px-4 py-16 text-center">
       <h1 className="text-xl font-semibold">Não foi possível carregar este NFT</h1>
-      <p className="text-sm text-muted-foreground">{error.message}</p>
+      <p className="text-sm text-muted-foreground">
+        {error instanceof Error ? error.message : 'Erro inesperado.'}
+      </p>
       <Button variant="outline" onClick={() => reset()}>
         Tentar novamente
       </Button>
@@ -82,56 +88,51 @@ function NftDetailPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6">
+    <main className="mx-auto flex w-full max-w-360 flex-col gap-8 px-5 py-8 sm:px-8">
       <nav aria-label="breadcrumb" className="text-sm text-muted-foreground">
-        <Link to="/" className="hover:underline">
-          Catálogo
+        <Link to="/" search={DEFAULT_CATALOG_SEARCH} className="hover:text-foreground hover:underline">
+          Início
         </Link>
         <span className="mx-1.5">/</span>
         <span className="text-foreground">{nft.name}</span>
       </nav>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <div className="flex flex-col gap-3">
-          <img
-            src={activeImage}
-            alt={nft.name}
-            width={800}
-            height={800}
-            className="aspect-square w-full rounded-xl object-cover ring-1 ring-foreground/10"
-          />
-          <div className="flex gap-2">
-            {nft.galleryUrls.map((url: string) => (
-              <button
-                key={url}
-                type="button"
-                onClick={() => setActiveImage(url)}
-                aria-label="Ver imagem da galeria"
-                aria-current={url === activeImage}
-                className="size-16 shrink-0 overflow-hidden rounded-lg ring-1 ring-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-current:ring-2 aria-current:ring-primary"
-              >
-                <img src={url} alt="" className="size-full object-cover" />
-              </button>
-            ))}
-          </div>
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-[96px_1fr_420px]">
+        <div className="order-2 flex gap-2 lg:order-1 lg:flex-col">
+          {nft.galleryUrls.map((url: string) => (
+            <button
+              key={url}
+              type="button"
+              onClick={() => setActiveImage(url)}
+              aria-label="Ver imagem da galeria"
+              aria-current={url === activeImage}
+              className="size-16 shrink-0 overflow-hidden rounded-lg bg-elevated ring-1 ring-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-current:ring-2 aria-current:ring-accent lg:size-24"
+            >
+              <img src={url} alt="" className="size-full object-cover" />
+            </button>
+          ))}
         </div>
 
-        <div className="flex flex-col gap-4">
+        <div className="order-1 overflow-hidden rounded-xl bg-elevated ring-1 ring-border lg:order-2">
+          <img src={activeImage} alt={nft.name} width={800} height={800} className="aspect-square w-full object-cover" />
+        </div>
+
+        <div className="order-3 flex flex-col gap-4">
           <div className="flex items-center gap-2">
             <img src={nft.creator.avatarUrl} alt="" className="size-8 rounded-full" />
             <span className="text-sm font-medium">{nft.creator.name}</span>
-            {nft.creator.verified && <Badge variant="secondary">Verificado</Badge>}
+            {nft.creator.verified && <Badge>Verificado</Badge>}
           </div>
 
           <div>
-            <h1 className="text-2xl font-semibold text-foreground">{nft.name}</h1>
+            <h1 className="text-2xl font-bold text-foreground">{nft.name}</h1>
             <p className="text-sm text-muted-foreground">{nft.collectionName}</p>
           </div>
 
-          <p className="text-sm text-foreground/80">{nft.description}</p>
+          <p className="text-sm leading-relaxed text-muted-foreground">{nft.description}</p>
 
           <div className="flex flex-col gap-2">
-            <span className="text-sm font-medium">Edição</span>
+            <span className="text-sm font-bold">Edição</span>
             <div className="flex flex-wrap gap-2">
               {nft.editions.map((edition: NftEdition) => (
                 <button
@@ -140,7 +141,7 @@ function NftDetailPage() {
                   onClick={() => setSelectedEditionId(edition.id)}
                   aria-pressed={edition.id === selectedEditionId}
                   disabled={edition.available === 0}
-                  className="rounded-lg border border-input px-3 py-1.5 text-sm transition-colors aria-pressed:border-primary aria-pressed:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-full border border-border px-3 py-1.5 text-xs font-medium transition-colors aria-pressed:border-accent aria-pressed:bg-accent/10 aria-pressed:text-accent disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {edition.name} · {edition.priceEth} ETH
                   {edition.available === 0 && ' · Esgotado'}
@@ -150,10 +151,10 @@ function NftDetailPage() {
           </div>
 
           {selectedEdition && (
-            <div className="flex flex-col gap-3 rounded-xl border p-4">
+            <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
               <div className="flex items-baseline justify-between">
                 <span className="text-sm text-muted-foreground">Preço</span>
-                <span className="text-xl font-semibold">{selectedEdition.priceEth} ETH</span>
+                <span className="text-xl font-bold text-accent">{selectedEdition.priceEth} ETH</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground">Disponível</span>
@@ -174,7 +175,7 @@ function NftDetailPage() {
                     onClick={() => setQuantity((q) => Math.max(1, q - 1))}
                     disabled={quantity <= 1}
                   >
-                    −
+                    <Minus />
                   </Button>
                   <input
                     id="quantity"
@@ -197,7 +198,7 @@ function NftDetailPage() {
                     onClick={() => setQuantity((q) => Math.min(selectedEdition.available, q + 1))}
                     disabled={quantity >= selectedEdition.available}
                   >
-                    +
+                    <Plus />
                   </Button>
                 </div>
               </div>
@@ -208,7 +209,7 @@ function NftDetailPage() {
                   disabled={selectedEdition.available === 0 || addCartMutation.isPending}
                   onClick={handleAddToCart}
                 >
-                  {addCartMutation.isPending ? 'Adicionando…' : 'Adicionar ao carrinho'}
+                  {addCartMutation.isPending ? 'Adicionando…' : 'COMPRAR'}
                 </Button>
                 <Button
                   variant="outline"
@@ -217,9 +218,9 @@ function NftDetailPage() {
                   aria-pressed={isFavorite}
                   disabled={toggleFavoriteMutation.isPending}
                   onClick={handleToggleFavorite}
-                  className={isFavorite ? 'text-destructive' : undefined}
+                  className={isFavorite ? 'border-accent text-accent' : undefined}
                 >
-                  {isFavorite ? '♥' : '♡'}
+                  <Heart fill={isFavorite ? 'currentColor' : 'none'} />
                 </Button>
               </div>
               {addFeedback && (
@@ -237,10 +238,11 @@ function NftDetailPage() {
 
 function NftDetailSkeleton() {
   return (
-    <main className="mx-auto flex w-full max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6">
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <Skeleton className="aspect-square w-full rounded-xl" />
-        <div className="flex flex-col gap-3">
+    <main className="mx-auto flex w-full max-w-360 flex-col gap-8 px-5 py-8 sm:px-8">
+      <div className="grid grid-cols-1 gap-10 lg:grid-cols-[96px_1fr_420px]">
+        <Skeleton className="order-1 hidden rounded-xl lg:block" />
+        <Skeleton className="order-1 aspect-square w-full rounded-xl lg:order-2" />
+        <div className="order-3 flex flex-col gap-3">
           <Skeleton className="h-8 w-2/3" />
           <Skeleton className="h-4 w-1/3" />
           <Skeleton className="h-20 w-full" />

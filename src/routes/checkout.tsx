@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useSessionQuery } from '@/features/auth/hooks'
 import { useAppliedCoupon } from '@/features/cart/coupon'
@@ -11,8 +10,9 @@ import { useCartQuery } from '@/features/cart/hooks'
 import { useCreateOrderMutation } from '@/features/orders/hooks'
 import { useQuoteQuery } from '@/features/quote/hooks'
 import { useWalletsQuery } from '@/features/wallets/hooks'
+import { DEFAULT_CATALOG_SEARCH } from '@/lib/catalog-search'
 import { requireAuthBeforeLoad } from '@/lib/route-guards'
-import { ApiError, type Quote, type Wallet } from '@/types'
+import { ApiError } from '@/types'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
 import { useState } from 'react'
@@ -62,12 +62,10 @@ function CheckoutPage() {
   const [appliedCoupon] = useAppliedCoupon()
   const createOrderMutation = useCreateOrderMutation()
 
-  const [step, setStep] = useState<'form' | 'review'>('form')
   const [selectedWalletId, setSelectedWalletId] = useState<string | undefined>(undefined)
   const [connectionState, setConnectionState] = useState<ConnectionState>('idle')
   const [connectDialogOpen, setConnectDialogOpen] = useState(false)
   const [staleNotice, setStaleNotice] = useState<string | null>(null)
-  const [reviewedQuote, setReviewedQuote] = useState<Quote | null>(null)
 
   const {
     register,
@@ -86,9 +84,10 @@ function CheckoutPage() {
   const quote = useQuoteQuery(quoteItems, appliedCoupon, Boolean(cart && cart.items.length > 0))
   const selectedWallet = wallets?.find((w) => w.id === selectedWalletId)
 
-  function handleConnect() {
-    setConnectDialogOpen(true)
+  function handleSelectWallet(walletId: string) {
+    setSelectedWalletId(walletId)
     setConnectionState('connecting')
+    setConnectDialogOpen(true)
   }
 
   function approveConnection() {
@@ -103,19 +102,14 @@ function CheckoutPage() {
 
   function disconnect() {
     setConnectionState('idle')
+    setSelectedWalletId(undefined)
   }
 
-  const goToReview = handleSubmit(() => {
-    if (!quote.data) return
-    setReviewedQuote(quote.data)
-    setStaleNotice(null)
-    setStep('review')
-  })
-
   async function handleConfirm(collector: CollectorForm) {
-    if (!selectedWallet || !reviewedQuote) return
+    if (!selectedWallet || !quote.data) return
     setStaleNotice(null)
 
+    const reviewed = quote.data
     const fresh = await quote.refetch()
     const freshQuote = fresh.data
     const cartChanged = cart?.items.some((item) => item.priceChanged || item.availabilityChanged)
@@ -123,11 +117,10 @@ function CheckoutPage() {
     if (
       !freshQuote ||
       cartChanged ||
-      freshQuote.totalEth !== reviewedQuote.totalEth ||
-      freshQuote.subtotalEth !== reviewedQuote.subtotalEth
+      freshQuote.totalEth !== reviewed.totalEth ||
+      freshQuote.subtotalEth !== reviewed.subtotalEth
     ) {
-      setReviewedQuote(freshQuote ?? null)
-      setStaleNotice('Os valores foram atualizados. Revise o pedido antes de confirmar novamente.')
+      setStaleNotice('Os valores foram atualizados. Revise o pedido e confirme novamente.')
       return
     }
 
@@ -153,7 +146,7 @@ function CheckoutPage() {
 
   if (isCartPending || isWalletsPending) {
     return (
-      <main className="mx-auto flex w-full max-w-2xl flex-col gap-4 px-4 py-8 sm:px-6">
+      <main className="mx-auto flex w-full max-w-360 flex-col gap-4 px-5 py-8 sm:px-8">
         <Skeleton className="h-8 w-40" />
         <Skeleton className="h-64 w-full rounded-xl" />
       </main>
@@ -162,9 +155,9 @@ function CheckoutPage() {
 
   if (!cart || cart.items.length === 0) {
     return (
-      <main className="mx-auto flex w-full max-w-2xl flex-col items-center gap-3 px-4 py-16 text-center">
+      <main className="mx-auto flex w-full max-w-360 flex-col items-center gap-3 px-5 py-16 text-center">
         <p className="text-sm text-muted-foreground">Seu carrinho está vazio.</p>
-        <Button nativeButton={false} render={<Link to="/" />}>
+        <Button nativeButton={false} render={<Link to="/" search={DEFAULT_CATALOG_SEARCH} />}>
           Explorar catálogo
         </Button>
       </main>
@@ -172,170 +165,53 @@ function CheckoutPage() {
   }
 
   return (
-    <main className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-4 py-8 sm:px-6">
-      <h1 className="text-2xl font-semibold text-foreground">Pagamento</h1>
+    <main className="mx-auto flex w-full max-w-360 flex-col gap-6 px-5 py-8 sm:px-8">
+      <nav aria-label="breadcrumb" className="text-sm text-muted-foreground">
+        <Link to="/" search={DEFAULT_CATALOG_SEARCH} className="hover:text-foreground hover:underline">
+          Início
+        </Link>
+        <span className="mx-1.5">/</span>
+        <Link to="/cart" className="hover:text-foreground hover:underline">
+          Carrinho
+        </Link>
+        <span className="mx-1.5">/</span>
+        <span className="text-foreground">Pagamento</span>
+      </nav>
 
-      {step === 'form' && (
-        <form onSubmit={goToReview} noValidate className="flex flex-col gap-6">
-          <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-medium text-muted-foreground">Dados do colecionador</h2>
+      <form
+        onSubmit={handleSubmit(handleConfirm)}
+        noValidate
+        className="grid grid-cols-1 gap-10 lg:grid-cols-[1fr_400px]"
+      >
+        <section className="flex flex-col gap-4">
+          <h2 className="text-sm font-bold">Perfil do colecionador</h2>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="collectorName">Nome</Label>
-              <Input
-                id="collectorName"
-                aria-invalid={Boolean(errors.collectorName)}
-                {...register('collectorName')}
-              />
-              {errors.collectorName && (
-                <p className="text-xs text-destructive">{errors.collectorName.message}</p>
-              )}
+              <Label htmlFor="collectorName">
+                Nome de exibição<span className="text-accent">*</span>
+              </Label>
+              <Input id="collectorName" aria-invalid={Boolean(errors.collectorName)} {...register('collectorName')} />
+              {errors.collectorName && <p className="text-xs text-destructive">{errors.collectorName.message}</p>}
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="collectorEmail">E-mail</Label>
+              <Label htmlFor="collectorEmail">
+                E-mail<span className="text-accent">*</span>
+              </Label>
               <Input
                 id="collectorEmail"
                 type="email"
                 aria-invalid={Boolean(errors.collectorEmail)}
                 {...register('collectorEmail')}
               />
-              {errors.collectorEmail && (
-                <p className="text-xs text-destructive">{errors.collectorEmail.message}</p>
-              )}
+              {errors.collectorEmail && <p className="text-xs text-destructive">{errors.collectorEmail.message}</p>}
             </div>
-          </section>
-
-          <section className="flex flex-col gap-3">
-            <h2 className="text-sm font-medium text-muted-foreground">Carteira e rede</h2>
-            {wallets && wallets.length === 0 ? (
-              <Alert>
-                <AlertDescription>
-                  Você ainda não tem carteiras cadastradas.{' '}
-                  <Link to="/wallets" className="underline underline-offset-4">
-                    Cadastrar carteira
-                  </Link>
-                </AlertDescription>
-              </Alert>
-            ) : (
-              <>
-                <Select
-                  value={selectedWalletId}
-                  onValueChange={(value) => {
-                    setSelectedWalletId(value)
-                    setConnectionState('idle')
-                  }}
-                >
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="Selecione uma carteira" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {wallets?.map((wallet: Wallet) => (
-                      <SelectItem key={wallet.id} value={wallet.id}>
-                        {wallet.label} · {wallet.network}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-
-                {selectedWallet && (
-                  <div className="flex items-center justify-between rounded-lg border p-3 text-sm">
-                    <div className="flex flex-col">
-                      <span className="font-mono text-xs text-muted-foreground">{selectedWallet.address}</span>
-                      <span
-                        role="status"
-                        className={
-                          connectionState === 'connected'
-                            ? 'text-emerald-600 dark:text-emerald-400'
-                            : connectionState === 'rejected'
-                              ? 'text-destructive'
-                              : 'text-muted-foreground'
-                        }
-                      >
-                        {connectionState === 'connected'
-                          ? 'Conectada'
-                          : connectionState === 'rejected'
-                            ? 'Conexão recusada'
-                            : 'Não conectada'}
-                      </span>
-                    </div>
-                    {connectionState === 'connected' ? (
-                      <Button type="button" variant="outline" size="sm" onClick={disconnect}>
-                        Desconectar
-                      </Button>
-                    ) : (
-                      <Button type="button" variant="outline" size="sm" onClick={handleConnect}>
-                        {connectionState === 'rejected' ? 'Tentar novamente' : 'Conectar carteira'}
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
-          </section>
+          </div>
 
           {quote.isError && (
             <Alert variant="destructive">
               <AlertDescription>
                 {quote.error instanceof ApiError ? quote.error.message : 'Não foi possível calcular o pedido.'}
               </AlertDescription>
-            </Alert>
-          )}
-
-          <Button
-            type="submit"
-            disabled={!selectedWallet || connectionState !== 'connected' || !quote.data || quote.isError}
-          >
-            Revisar pedido
-          </Button>
-        </form>
-      )}
-
-      {step === 'review' && reviewedQuote && selectedWallet && (
-        <div className="flex flex-col gap-6">
-          <section className="flex flex-col gap-2 rounded-xl border p-4">
-            <h2 className="text-sm font-medium text-muted-foreground">Itens</h2>
-            {cart.items.map((item) => (
-              <div key={item.id} className="flex justify-between text-sm">
-                <span>
-                  {item.nftName} ({item.editionName}) × {item.quantity}
-                </span>
-                <span>{item.unitPriceEth} ETH</span>
-              </div>
-            ))}
-          </section>
-
-          <section className="flex flex-col gap-1.5 rounded-xl border p-4 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span>{reviewedQuote.subtotalEth} ETH</span>
-            </div>
-            {reviewedQuote.coupon && (
-              <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
-                <span>Desconto ({reviewedQuote.coupon.code})</span>
-                <span>−{reviewedQuote.coupon.discountEth} ETH</span>
-              </div>
-            )}
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Taxa de rede</span>
-              <span>{reviewedQuote.networkFeeEth} ETH</span>
-            </div>
-            <div className="flex justify-between border-t pt-1.5 text-base font-semibold">
-              <span>Total</span>
-              <span>{reviewedQuote.totalEth} ETH</span>
-            </div>
-          </section>
-
-          <section className="flex flex-col gap-1 rounded-xl border p-4 text-sm">
-            <span className="text-muted-foreground">Carteira</span>
-            <span>
-              {selectedWallet.label} · {selectedWallet.network}
-            </span>
-            <span className="font-mono text-xs text-muted-foreground">{selectedWallet.address}</span>
-          </section>
-
-          {staleNotice && (
-            <Alert variant="destructive">
-              <AlertTitle>Valores atualizados</AlertTitle>
-              <AlertDescription>{staleNotice}</AlertDescription>
             </Alert>
           )}
 
@@ -349,20 +225,143 @@ function CheckoutPage() {
             </Alert>
           )}
 
-          <div className="flex gap-3">
-            <Button variant="outline" onClick={() => setStep('form')} disabled={createOrderMutation.isPending}>
-              Voltar
-            </Button>
-            <Button
-              className="flex-1"
-              disabled={createOrderMutation.isPending}
-              onClick={handleSubmit(handleConfirm)}
-            >
-              {createOrderMutation.isPending ? 'Enviando…' : 'Confirmar compra'}
-            </Button>
+          {staleNotice && (
+            <Alert variant="destructive">
+              <AlertTitle>Valores atualizados</AlertTitle>
+              <AlertDescription>{staleNotice}</AlertDescription>
+            </Alert>
+          )}
+        </section>
+
+        <aside className="flex h-fit flex-col gap-4 rounded-xl border border-border bg-card p-4">
+          <h2 className="text-sm font-bold">Seus NFTs</h2>
+          <ul className="flex flex-col gap-3">
+            {cart.items.map((item) => (
+              <li key={item.id} className="flex items-center gap-3 text-sm">
+                <img src={item.nftImageUrl} alt="" className="size-12 shrink-0 rounded-lg bg-elevated object-cover" />
+                <div className="flex flex-1 flex-col">
+                  <span className="font-medium">{item.nftName}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {item.editionName} · x{item.quantity}
+                  </span>
+                </div>
+                <span className="font-bold text-accent">
+                  {(Number(item.unitPriceEth) * item.quantity).toFixed(4)} ETH
+                </span>
+              </li>
+            ))}
+          </ul>
+
+          <div className="flex flex-col gap-1.5 border-t border-border pt-3 text-sm">
+            {quote.data ? (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Subtotal</span>
+                  <span>{quote.data.subtotalEth} ETH</span>
+                </div>
+                {quote.data.coupon && (
+                  <div className="flex justify-between text-accent">
+                    <span>Desconto ({quote.data.coupon.code})</span>
+                    <span>−{quote.data.coupon.discountEth} ETH</span>
+                  </div>
+                )}
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Taxa de rede</span>
+                  <span>{quote.data.networkFeeEth} ETH</span>
+                </div>
+                <div className="flex justify-between border-t border-border pt-1.5 text-base font-bold">
+                  <span>Total</span>
+                  <span className="text-accent">{quote.data.totalEth} ETH</span>
+                </div>
+              </>
+            ) : (
+              <Skeleton className="h-16 w-full" />
+            )}
           </div>
-        </div>
-      )}
+
+          <div className="flex flex-col gap-2 border-t border-border pt-3">
+            <h3 className="text-sm font-bold">Carteira e rede</h3>
+            {wallets && wallets.length === 0 ? (
+              <Alert>
+                <AlertDescription>
+                  Você ainda não tem carteiras cadastradas.{' '}
+                  <Link to="/wallets" className="underline underline-offset-4">
+                    Cadastrar carteira
+                  </Link>
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <fieldset className="flex flex-col gap-2">
+                <legend className="sr-only">Selecione uma carteira</legend>
+                {wallets?.map((wallet) => {
+                  const isSelected = wallet.id === selectedWalletId
+                  return (
+                    <label
+                      key={wallet.id}
+                      className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-sm has-checked:border-accent"
+                    >
+                      <span className="flex items-center gap-2">
+                        <input
+                          type="radio"
+                          name="wallet"
+                          value={wallet.id}
+                          checked={isSelected}
+                          onChange={() => handleSelectWallet(wallet.id)}
+                          className="accent-accent"
+                        />
+                        {wallet.label} · {wallet.network}
+                      </span>
+                      {isSelected && (
+                        <span
+                          role="status"
+                          className={
+                            connectionState === 'connected'
+                              ? 'text-xs text-accent'
+                              : connectionState === 'rejected'
+                                ? 'text-xs text-destructive'
+                                : 'text-xs text-muted-foreground'
+                          }
+                        >
+                          {connectionState === 'connected'
+                            ? 'Conectada'
+                            : connectionState === 'rejected'
+                              ? 'Recusada'
+                              : 'Conectando…'}
+                        </span>
+                      )}
+                    </label>
+                  )
+                })}
+                {selectedWallet && connectionState === 'connected' && (
+                  <Button type="button" variant="ghost" size="sm" onClick={disconnect} className="self-start">
+                    Desconectar
+                  </Button>
+                )}
+                {selectedWallet && connectionState === 'rejected' && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleSelectWallet(selectedWallet.id)}
+                    className="self-start"
+                  >
+                    Tentar novamente
+                  </Button>
+                )}
+              </fieldset>
+            )}
+          </div>
+
+          <Button
+            type="submit"
+            disabled={
+              !selectedWallet || connectionState !== 'connected' || !quote.data || quote.isError || createOrderMutation.isPending
+            }
+          >
+            {createOrderMutation.isPending ? 'Enviando…' : 'Confirmar compra'}
+          </Button>
+        </aside>
+      </form>
 
       <Dialog open={connectDialogOpen} onOpenChange={setConnectDialogOpen}>
         <DialogContent>

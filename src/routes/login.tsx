@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useLoginMutation } from '@/features/auth/hooks'
+import { DEFAULT_CATALOG_SEARCH } from '@/lib/catalog-search'
 import { ApiError } from '@/types'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
@@ -40,7 +41,7 @@ function LoginPage() {
         if (redirect) {
           navigate({ href: redirect })
         } else {
-          navigate({ to: '/' })
+          navigate({ to: '/', search: DEFAULT_CATALOG_SEARCH })
         }
       },
       onError: (err) => {
@@ -61,64 +62,67 @@ function LoginPage() {
       : null
 
   return (
-    <main className="mx-auto flex w-full max-w-sm flex-1 flex-col justify-center gap-6 px-4 py-16">
-      <div className="flex flex-col gap-1 text-center">
-        <h1 className="text-xl font-semibold text-foreground">Entrar</h1>
-        <p className="text-sm text-muted-foreground">Acesse sua conta para continuar.</p>
+    <main className="mx-auto flex w-full max-w-md flex-1 flex-col justify-center px-5 py-16 sm:px-8">
+      <div className="overflow-hidden rounded-2xl border-t-2 border-accent bg-card ring-1 ring-border">
+        <div className="flex flex-col gap-4 p-6">
+          <nav className="flex items-center gap-4 text-sm">
+            <span className="border-b-2 border-accent pb-1 font-bold text-foreground">Entrar</span>
+            <Link to="/register" className="pb-1 text-muted-foreground hover:text-foreground">
+              Criar conta
+            </Link>
+          </nav>
+          <p className="text-sm text-muted-foreground">
+            Entre para gerenciar sua carteira, coleção e perfil de criador.
+          </p>
+
+          <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+            {topLevelError && (
+              <Alert variant="destructive">
+                <AlertDescription>{topLevelError}</AlertDescription>
+              </Alert>
+            )}
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="email">E-mail</Label>
+              <Input
+                id="email"
+                type="email"
+                autoComplete="email"
+                placeholder="contato@email.com"
+                aria-invalid={Boolean(errors.email)}
+                aria-describedby={errors.email ? 'email-error' : undefined}
+                {...registerField('email')}
+              />
+              {errors.email && (
+                <p id="email-error" className="text-xs text-destructive">
+                  {errors.email.message}
+                </p>
+              )}
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="password">Senha</Label>
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                aria-invalid={Boolean(errors.password)}
+                aria-describedby={errors.password ? 'password-error' : undefined}
+                {...registerField('password')}
+              />
+              {errors.password && (
+                <p id="password-error" className="text-xs text-destructive">
+                  {errors.password.message}
+                </p>
+              )}
+            </div>
+
+            <Button type="submit" disabled={loginMutation.isPending} className="mt-2">
+              {loginMutation.isPending ? 'Entrando…' : 'Entrar'}
+            </Button>
+          </form>
+        </div>
       </div>
-
-      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
-        {topLevelError && (
-          <Alert variant="destructive">
-            <AlertDescription>{topLevelError}</AlertDescription>
-          </Alert>
-        )}
-
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="email">E-mail</Label>
-          <Input
-            id="email"
-            type="email"
-            autoComplete="email"
-            aria-invalid={Boolean(errors.email)}
-            aria-describedby={errors.email ? 'email-error' : undefined}
-            {...registerField('email')}
-          />
-          {errors.email && (
-            <p id="email-error" className="text-xs text-destructive">
-              {errors.email.message}
-            </p>
-          )}
-        </div>
-
-        <div className="flex flex-col gap-1.5">
-          <Label htmlFor="password">Senha</Label>
-          <Input
-            id="password"
-            type="password"
-            autoComplete="current-password"
-            aria-invalid={Boolean(errors.password)}
-            aria-describedby={errors.password ? 'password-error' : undefined}
-            {...registerField('password')}
-          />
-          {errors.password && (
-            <p id="password-error" className="text-xs text-destructive">
-              {errors.password.message}
-            </p>
-          )}
-        </div>
-
-        <Button type="submit" disabled={loginMutation.isPending} className="mt-2">
-          {loginMutation.isPending ? 'Entrando…' : 'Entrar'}
-        </Button>
-      </form>
-
-      <p className="text-center text-sm text-muted-foreground">
-        Não tem conta?{' '}
-        <Link to="/register" className="text-foreground underline underline-offset-4">
-          Cadastre-se
-        </Link>
-      </p>
     </main>
   )
 }

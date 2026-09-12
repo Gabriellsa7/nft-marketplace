@@ -6,8 +6,10 @@ import { useSessionQuery } from '@/features/auth/hooks'
 import { useAppliedCoupon } from '@/features/cart/coupon'
 import { useCartQuery, useRemoveCartItemMutation, useUpdateCartItemMutation } from '@/features/cart/hooks'
 import { useQuoteQuery } from '@/features/quote/hooks'
+import { DEFAULT_CATALOG_SEARCH } from '@/lib/catalog-search'
 import { ApiError } from '@/types'
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router'
+import { Minus, Plus, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 
 export const Route = createFileRoute('/cart')({
@@ -57,7 +59,7 @@ function CartPage() {
 
   if (isPending) {
     return (
-      <main className="mx-auto flex w-full max-w-4xl flex-col gap-4 px-4 py-8 sm:px-6">
+      <main className="mx-auto flex w-full max-w-360 flex-col gap-4 px-5 py-8 sm:px-8">
         <Skeleton className="h-8 w-40" />
         {Array.from({ length: 3 }).map((_, i) => (
           <Skeleton key={i} className="h-24 w-full rounded-xl" />
@@ -68,7 +70,7 @@ function CartPage() {
 
   if (isError) {
     return (
-      <main className="mx-auto flex w-full max-w-4xl flex-col items-center gap-3 px-4 py-16 text-center">
+      <main className="mx-auto flex w-full max-w-360 flex-col items-center gap-3 px-5 py-16 text-center">
         <p className="text-sm text-muted-foreground">Não foi possível carregar o carrinho.</p>
         <Button variant="outline" onClick={() => refetch()}>
           Tentar novamente
@@ -80,94 +82,120 @@ function CartPage() {
   const items = cart?.items ?? []
 
   return (
-    <main className="mx-auto flex w-full max-w-4xl flex-col gap-6 px-4 py-8 sm:px-6">
-      <h1 className="text-2xl font-semibold text-foreground">Carrinho</h1>
+    <main className="mx-auto flex w-full max-w-360 flex-col gap-6 px-5 py-8 sm:px-8">
+      <nav aria-label="breadcrumb" className="text-sm text-muted-foreground">
+        <Link to="/" search={DEFAULT_CATALOG_SEARCH} className="hover:text-foreground hover:underline">
+          Início
+        </Link>
+        <span className="mx-1.5">/</span>
+        <span className="text-foreground">Carrinho</span>
+      </nav>
 
       {items.length === 0 ? (
-        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed p-12 text-center text-muted-foreground">
+        <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border p-12 text-center text-muted-foreground">
           <p>Seu carrinho está vazio.</p>
-          <Button nativeButton={false} render={<Link to="/" />}>
+          <Button nativeButton={false} render={<Link to="/" search={DEFAULT_CATALOG_SEARCH} />}>
             Explorar catálogo
           </Button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_320px]">
-          <ul className="flex flex-col gap-4">
-            {items.map((item) => (
-              <li
-                key={item.id}
-                className="flex gap-4 rounded-xl border p-3 sm:items-center"
-              >
-                <img
-                  src={item.nftImageUrl}
-                  alt={item.nftName}
-                  className="size-20 shrink-0 rounded-lg object-cover"
-                />
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                    <span className="text-sm font-medium">{item.nftName}</span>
-                    <span className="text-sm font-semibold">{item.unitPriceEth} ETH</span>
-                  </div>
-                  <span className="text-xs text-muted-foreground">{item.editionName}</span>
+        <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1fr_340px]">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-140 border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-xs text-muted-foreground">
+                  <th className="pb-3 font-bold">NFTs</th>
+                  <th className="pb-3 font-bold">Preço</th>
+                  <th className="pb-3 font-bold">Edições</th>
+                  <th className="pb-3 text-right font-bold">Total</th>
+                  <th className="pb-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => {
+                  const lineTotal = (Number(item.unitPriceEth) * item.quantity).toFixed(4)
+                  return (
+                    <tr key={item.id} className="border-b border-border align-top">
+                      <td className="py-4 pr-4">
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={item.nftImageUrl}
+                            alt={item.nftName}
+                            className="size-14 shrink-0 rounded-lg bg-elevated object-cover"
+                          />
+                          <div className="flex flex-col gap-0.5">
+                            <span className="font-medium">{item.nftName}</span>
+                            <span className="text-xs text-muted-foreground">{item.editionName}</span>
+                            {(item.priceChanged || item.availabilityChanged) && (
+                              <Alert variant="destructive" className="mt-1 py-1.5">
+                                <AlertDescription className="text-xs">
+                                  {item.priceChanged && item.availabilityChanged
+                                    ? 'Preço e disponibilidade mudaram.'
+                                    : item.priceChanged
+                                      ? 'O preço mudou.'
+                                      : 'A disponibilidade mudou.'}
+                                </AlertDescription>
+                              </Alert>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4 pr-4 whitespace-nowrap">{item.unitPriceEth} ETH</td>
+                      <td className="py-4 pr-4">
+                        <div className="flex items-center gap-1">
+                          <Button
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label={`Diminuir quantidade de ${item.nftName}`}
+                            disabled={item.quantity <= 1 || updateItemMutation.isPending}
+                            onClick={() =>
+                              updateItemMutation.mutate({ itemId: item.id, quantity: item.quantity - 1 })
+                            }
+                          >
+                            <Minus />
+                          </Button>
+                          <span className="w-6 text-center" aria-live="polite">
+                            {item.quantity}
+                          </span>
+                          <Button
+                            variant="outline"
+                            size="icon-sm"
+                            aria-label={`Aumentar quantidade de ${item.nftName}`}
+                            disabled={item.quantity >= item.available || updateItemMutation.isPending}
+                            onClick={() =>
+                              updateItemMutation.mutate({ itemId: item.id, quantity: item.quantity + 1 })
+                            }
+                          >
+                            <Plus />
+                          </Button>
+                        </div>
+                      </td>
+                      <td className="py-4 pr-4 text-right font-bold whitespace-nowrap text-accent">
+                        {lineTotal} ETH
+                      </td>
+                      <td className="py-4 text-right">
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`Remover ${item.nftName} do carrinho`}
+                          disabled={removeItemMutation.isPending}
+                          onClick={() => removeItemMutation.mutate(item.id)}
+                        >
+                          <Trash2 />
+                        </Button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
 
-                  {(item.priceChanged || item.availabilityChanged) && (
-                    <Alert variant="destructive" className="mt-1">
-                      <AlertDescription>
-                        {item.priceChanged && item.availabilityChanged
-                          ? 'O preço e a disponibilidade deste item mudaram.'
-                          : item.priceChanged
-                            ? 'O preço deste item mudou.'
-                            : 'A disponibilidade deste item mudou.'}
-                      </AlertDescription>
-                    </Alert>
-                  )}
-
-                  <div className="mt-1 flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-1">
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label={`Diminuir quantidade de ${item.nftName}`}
-                        disabled={item.quantity <= 1 || updateItemMutation.isPending}
-                        onClick={() =>
-                          updateItemMutation.mutate({ itemId: item.id, quantity: item.quantity - 1 })
-                        }
-                      >
-                        −
-                      </Button>
-                      <span className="w-8 text-center text-sm" aria-live="polite">
-                        {item.quantity}
-                      </span>
-                      <Button
-                        variant="outline"
-                        size="icon-sm"
-                        aria-label={`Aumentar quantidade de ${item.nftName}`}
-                        disabled={item.quantity >= item.available || updateItemMutation.isPending}
-                        onClick={() =>
-                          updateItemMutation.mutate({ itemId: item.id, quantity: item.quantity + 1 })
-                        }
-                      >
-                        +
-                      </Button>
-                    </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={removeItemMutation.isPending}
-                      onClick={() => removeItemMutation.mutate(item.id)}
-                    >
-                      Remover
-                    </Button>
-                  </div>
-                </div>
-              </li>
-            ))}
-          </ul>
-
-          <aside className="flex h-fit flex-col gap-4 rounded-xl border p-4">
+          <aside className="flex h-fit flex-col gap-4 rounded-xl border border-border bg-card p-4">
+            <h2 className="text-sm font-bold">Resumo da carteira</h2>
             <div className="flex flex-col gap-2">
               <label htmlFor="coupon" className="text-sm font-medium">
-                Cupom
+                Código promocional
               </label>
               {appliedCoupon ? (
                 <div className="flex items-center justify-between rounded-lg border border-input px-2.5 py-1.5 text-sm">
@@ -182,10 +210,10 @@ function CartPage() {
                     id="coupon"
                     value={couponInput}
                     onChange={(e) => setCouponInput(e.target.value)}
-                    placeholder="Código do cupom"
+                    placeholder="Digite o código promocional..."
                     aria-describedby={couponError ? 'coupon-error' : undefined}
                   />
-                  <Button variant="outline" onClick={handleApplyCoupon} disabled={!couponInput.trim()}>
+                  <Button onClick={handleApplyCoupon} disabled={!couponInput.trim()}>
                     Aplicar
                   </Button>
                 </div>
@@ -197,7 +225,7 @@ function CartPage() {
               )}
             </div>
 
-            <div className="flex flex-col gap-1.5 border-t pt-3 text-sm">
+            <div className="flex flex-col gap-1.5 border-t border-border pt-3 text-sm">
               {quote.isPending && quote.fetchStatus !== 'idle' ? (
                 <>
                   <Skeleton className="h-4 w-full" />
@@ -211,7 +239,7 @@ function CartPage() {
                     <span>{quote.data.subtotalEth} ETH</span>
                   </div>
                   {quote.data.coupon && (
-                    <div className="flex justify-between text-emerald-600 dark:text-emerald-400">
+                    <div className="flex justify-between text-accent">
                       <span>Desconto ({quote.data.coupon.code})</span>
                       <span>−{quote.data.coupon.discountEth} ETH</span>
                     </div>
@@ -220,9 +248,9 @@ function CartPage() {
                     <span className="text-muted-foreground">Taxa de rede</span>
                     <span>{quote.data.networkFeeEth} ETH</span>
                   </div>
-                  <div className="flex justify-between border-t pt-1.5 text-base font-semibold">
+                  <div className="flex justify-between border-t border-border pt-1.5 text-base font-bold">
                     <span>Total</span>
-                    <span>{quote.data.totalEth} ETH</span>
+                    <span className="text-accent">{quote.data.totalEth} ETH</span>
                   </div>
                 </>
               ) : (
@@ -232,6 +260,9 @@ function CartPage() {
 
             <Button onClick={goToCheckout} disabled={items.length === 0}>
               Ir para pagamento
+            </Button>
+            <Button variant="ghost" size="sm" nativeButton={false} render={<Link to="/" search={DEFAULT_CATALOG_SEARCH} />}>
+              Continuar explorando
             </Button>
           </aside>
         </div>

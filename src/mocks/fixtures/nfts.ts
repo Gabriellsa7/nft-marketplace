@@ -17,7 +17,7 @@ const CREATORS = [
 ]
 
 const COLLECTIONS = [
-  'Neon Genesis',
+  'Kurio Apes',
   'Chroma Drift',
   'Silent Echoes',
   'Pixel Ruins',
@@ -25,8 +25,26 @@ const COLLECTIONS = [
   'Ghost Circuit',
 ]
 
-function seededImage(seed: string, index: number) {
-  return `https://picsum.photos/seed/${seed}-${index}/800/800`
+/** Local artwork exported from the Figma file — cycled across fixtures instead of a remote placeholder service. */
+const ARTWORKS = ['/img/nft01.png', '/img/nft02.png', '/img/nft03.png']
+
+function seededImage(index: number) {
+  return ARTWORKS[index % ARTWORKS.length]
+}
+
+const AVATAR_COLORS = ['#d28a4c', '#b39463', '#e89b55', '#55321f']
+
+/** Local initials avatar (data URI) — avoids a remote avatar service for offline/Lighthouse friendliness. */
+function initialsAvatar(name: string, index: number): string {
+  const initials = name
+    .split(' ')
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase()
+  const bg = AVATAR_COLORS[index % AVATAR_COLORS.length]
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="150" height="150"><rect width="150" height="150" fill="${bg}"/><text x="50%" y="50%" font-family="monospace" font-size="56" font-weight="700" fill="#140d0a" text-anchor="middle" dominant-baseline="central">${initials}</text></svg>`
+  return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`
 }
 
 function buildNft(index: number): Nft {
@@ -56,13 +74,13 @@ function buildNft(index: number): Nft {
     name: `${collectionName} #${index + 1}`,
     description:
       'Peça digital gerada para o cenário de demonstração do marketplace. Os metadados e a imagem são ilustrativos.',
-    imageUrl: seededImage(seed, 0),
-    galleryUrls: [seededImage(seed, 0), seededImage(seed, 1), seededImage(seed, 2)],
+    imageUrl: seededImage(index),
+    galleryUrls: [seededImage(index), seededImage(index + 1), seededImage(index + 2)],
     category,
     creator: {
       id: creator.id,
       name: creator.name,
-      avatarUrl: `https://i.pravatar.cc/150?u=${creator.id}`,
+      avatarUrl: initialsAvatar(creator.name, index),
       verified: creator.verified,
     },
     collectionName,

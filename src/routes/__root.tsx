@@ -1,3 +1,4 @@
+import { Footer } from '@/components/layout/footer'
 import { Header } from '@/components/layout/header'
 import { useRealtimeSync } from '@/features/realtime/hooks'
 import { UNAUTHORIZED_EVENT } from '@/lib/api-client'
@@ -40,7 +41,10 @@ function RootComponent() {
   return (
     <div className="flex min-h-svh flex-col">
       <Header />
-      <Outlet />
+      <div className="flex flex-1 flex-col">
+        <Outlet />
+      </div>
+      <Footer />
     </div>
   )
 }
