@@ -84,6 +84,7 @@ Todos os hooks `_expire`/`_simulate-update`/`_resolve` são endpoints reais do M
 | `npm run lint` | ESLint. |
 | `npm run test:e2e` | Playwright — sobe o próprio dev server (`webServer` no `playwright.config.ts`) e roda em Chromium desktop + mobile (Pixel 7). Relatório HTML em `playwright-report/` (`npx playwright show-report`); traces de falhas ficam em `test-results/`. |
 | `npx playwright test --update-snapshots` | Regenera as baselines de regressão visual (`e2e/visual.spec.ts-snapshots/`) depois de uma mudança visual intencional. |
+| `npm run lighthouse` | Builda (se necessário), sobe o preview de produção e audita início/detalhe em mobile e desktop, 3 execuções cada, com os mocks ativos. Config em `scripts/lighthouse.mjs`. Relatórios HTML/JSON por execução em `lighthouse-reports/` (não versionados, regeneráveis); a mediana consolidada fica em `lighthouse-reports/summary.md` (versionado). Análise e causas de qualquer categoria abaixo da meta estão em `ARCHITECTURE.md` → "Performance (Lighthouse)". |
 
 ## Estrutura dos testes E2E (`e2e/`)
 

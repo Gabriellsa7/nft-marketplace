@@ -100,6 +100,31 @@ Atualização otimista com rollback: favoritar/desfavoritar (`useToggleFavoriteM
 - **Estoque só é decrementado e o carrinho só perde os itens comprados na confirmação do pedido** (`resolveOrder()` em `src/mocks/handlers/orders.ts`), nunca na criação. Um pedido `pending` ou `declined` não tem nenhum efeito colateral em estoque/carrinho — corrige uma inconsistência inicial em que a recusa "consumia" o item mesmo dizendo ao usuário que ele "continua disponível para nova compra". Resolução acontece via um timer real de ~4s com 8% de chance de recusa (comportamento de demonstração) ou, em teste, via `POST /orders/:id/_resolve`.
 - O recibo (`GET /orders/:id`) é um snapshot: valores gravados no momento da criação do pedido, nunca recalculados a partir do catálogo atual — uma mudança de preço posterior no mesmo NFT não altera pedidos já criados.
 
+## Performance (Lighthouse)
+
+Auditoria em `início` (`/`) e `detalhe` (`/nfts/nft-0`), mobile e desktop, 3 execuções cada, com o build de produção (`npm run build && npm run lighthouse`) e os mocks ativos, exatamente como a entrega final é servida. Config versionada em `scripts/lighthouse.mjs`; relatórios brutos (HTML/JSON por execução) ficam em `lighthouse-reports/` (gerados localmente, não versionados — ver `.gitignore`); a mediana consolidada fica em `lighthouse-reports/summary.md`/`summary.json`, versionados.
+
+Mediana das 3 execuções (Lighthouse 13.4.1, Chrome headless, Node 24):
+
+| Página | Perfil | Performance | Accessibility | Best Practices | SEO | LCP | CLS | TBT |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| início | mobile | 72 ⚠️ | 100 | 96 | 100 | 5.7s | 0.002 | 88ms |
+| início | desktop | 98 | 100 | 96 | 100 | 1.1s | 0.001 | 0ms |
+| detalhe | mobile | 71 ⚠️ | 100 | 96 | 100 | 5.9s | 0.001 | 67ms |
+| detalhe | desktop | 97 | 100 | 96 | 100 | 1.1s | 0.001 | 0ms |
+
+Accessibility, Best Practices e SEO batem a meta com folga em ambos os perfis. CLS é essencialmente zero em todo lugar (os skeletons preservam as dimensões do conteúdo real, como exigido). **Performance mobile fica abaixo da meta (≥90)** — desktop passa com folga (97–98).
+
+### Causa identificada (não é o LCP em si, é o que vem antes dele)
+
+O breakdown do LCP (`lcp-breakdown-insight`) mostra que, uma vez que a imagem do hero começa a carregar, ela é rápida: TTFB + delay + duração + render ficam somados em ~350ms nos três runs. O tempo "perdido" está **antes** disso: o First Contentful Paint mobile já está em ~3.3s — ou seja, **nada** é pintado na tela, nem o cabeçalho estático, até esse ponto. A causa é estrutural: `src/main.tsx` só chama `createRoot(...).render(...)` depois que `enableMocking()` resolve, e essa cadeia baixa e executa ~190KB (gzip) de runtime de mock antes de qualquer render — o worker do MSW (`browser-*.js`, ~42KB) mais um chunk (`realtime-simulation-*.js`, ~136KB) que arrasta consigo todos os handlers REST, `@mswjs/socket.io-binding`, `socket.io` e `decimal.js`, já que `setupWorker(...handlers)` precisa de todos os handlers registrados antes de poder iniciar. Sob o perfil mobile simulado (CPU 4x mais lenta, rede ~1.6Mbps), o tempo de boot desse JS (`bootup-time` 0.9s, `mainthread-work-breakdown` 1.7s) domina o tempo até a primeira pintura.
+
+Esse custo é uma consequência direta de uma exigência do próprio enunciado (§6: "a camada de mocks deve ser ativada por configuração e estar disponível no build de demonstração") — não é uma simplificação para melhorar a nota, é o inverso: a auditoria roda exatamente com a simulação completa ligada, sem atalho. Um app com backend real não pagaria esse custo de bootstrap.
+
+**Melhoria futura identificada, não aplicada nesta entrega** (risco de regressão perto do prazo, e exigiria reestruturar o gate de mounting): renderizar a árvore React imediatamente (cabeçalho, hero estático) e represar apenas as *buscas de dados* até o MSW estar pronto — hoje o gate é on/off para o app inteiro porque qualquer `fetch`/`XHR` disparado antes do `worker.start()` completar escaparia da interceptação do Service Worker.
+
+Nota sobre o ambiente: as medições rodaram numa máquina de desktop compartilhada (não um runner de CI dedicado/isolado) — a primeira bateria (antes dos fixes de SEO/LCP) mediu LCP mobile ~4.1s; esta segunda bateria, com mais carga concorrente no sistema, mediu ~5.7–5.9s. A direção da causa raiz (boot de JS bloqueando o primeiro paint) é a mesma nas duas; o valor absoluto varia com ruído de máquina, o que é esperado no modo de throttling simulado do Lighthouse e é a própria razão pela qual o enunciado pede 3 medições e a mediana.
+
 ## Limitações conhecidas
 
 - Sem persistência real entre dispositivos/abas incógnitas — tudo vive em `localStorage` do navegador (por design, já que não há backend).
