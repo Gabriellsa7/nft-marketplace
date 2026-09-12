@@ -1,4 +1,5 @@
 import { Header } from '@/components/layout/header'
+import { useRealtimeSync } from '@/features/realtime/hooks'
 import { UNAUTHORIZED_EVENT } from '@/lib/api-client'
 import type { QueryClient } from '@tanstack/react-query'
 import { createRootRouteWithContext, Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
@@ -16,6 +17,8 @@ function RootComponent() {
   const { queryClient } = Route.useRouteContext()
   const navigate = useNavigate()
   const location = useRouterState({ select: (s) => s.location })
+
+  useRealtimeSync()
 
   useEffect(() => {
     function handleUnauthorized() {

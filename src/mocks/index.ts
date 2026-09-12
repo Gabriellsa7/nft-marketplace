@@ -4,8 +4,10 @@ export async function enableMocking() {
   }
 
   const { worker } = await import('./browser')
+  const { startAmbientNftDrift } = await import('./realtime-simulation')
 
-  return worker.start({
+  await worker.start({
     onUnhandledRequest: 'bypass',
   })
+  startAmbientNftDrift()
 }

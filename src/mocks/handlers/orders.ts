@@ -1,7 +1,9 @@
 import { findWalletsByUserId, getDb, persistDb, type StoredOrder } from '@/mocks/db'
+import { bumpAndBroadcastNft } from '@/mocks/realtime-simulation'
 import { HandlerError, requireSession } from '@/mocks/respond'
 import { simulateNetwork, MockNetworkError } from '@/mocks/scenario'
-import type { CreateOrderInput, Order, OrderItem } from '@/types'
+import { emitOrderUpdated } from '@/mocks/socket-server'
+import type { CreateOrderInput, Order, OrderItem, RealtimeEnvelope } from '@/types'
 import { http, HttpResponse } from 'msw'
 
 const ORDER_RESOLUTION_DELAY_MS = 4000
@@ -44,11 +46,9 @@ async function hashRequestBody(input: CreateOrderInput): Promise<string> {
     .join('')
 }
 
-/**
- * Resolves a pending order after a delay, simulating on-chain confirmation.
- * TODO: replace this in-process timer with a real order.updated Socket.IO emission
- * once the @mswjs/socket.io-binding transport is wired in (next build phase).
- */
+/** Resolves a pending order after a delay, simulating on-chain confirmation, and
+ * broadcasts the transition over the mock Socket.IO channel (order.updated) — REST
+ * polling on GET /api/orders/:id remains as a fallback for reconnect/refresh recovery. */
 function scheduleOrderResolution(orderId: string) {
   setTimeout(() => {
     const db = getDb()
@@ -62,6 +62,14 @@ function scheduleOrderResolution(orderId: string) {
     order.updatedAt = new Date().toISOString()
     order.version += 1
     persistDb()
+
+    const envelope: RealtimeEnvelope<Order> = {
+      resourceId: order.id,
+      version: order.version,
+      occurredAt: order.updatedAt,
+      resource: toPublicOrder(order),
+    }
+    emitOrderUpdated(order.userId, envelope)
   }, ORDER_RESOLUTION_DELAY_MS)
 }
 
@@ -129,14 +137,20 @@ export const orderHandlers = [
         })
       }
 
-      // Reserve stock and bump versions so nft.updated observers see the drop.
+      // Reserve stock and broadcast nft.updated so catalog/detail/cart observers see the drop.
+      const purchasedByNft = new Map<string, typeof quote.items>()
       for (const quoteItem of quote.items) {
-        const nft = db.nfts.find((n) => n.id === quoteItem.nftId)
-        const edition = nft?.editions.find((e) => e.id === quoteItem.editionId)
-        if (edition) {
-          edition.available -= quoteItem.quantity
-          if (nft) nft.version += 1
-        }
+        const list = purchasedByNft.get(quoteItem.nftId) ?? []
+        list.push(quoteItem)
+        purchasedByNft.set(quoteItem.nftId, list)
+      }
+      for (const [nftId, purchases] of purchasedByNft) {
+        bumpAndBroadcastNft(nftId, (nft) => {
+          for (const purchase of purchases) {
+            const edition = nft.editions.find((e) => e.id === purchase.editionId)
+            if (edition) edition.available -= purchase.quantity
+          }
+        })
       }
 
       // Remove only the purchased items/quantities from the user's cart.
