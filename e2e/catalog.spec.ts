@@ -78,6 +78,64 @@ test.describe('Catálogo — busca, filtros, ordenação e paginação', () => {
     await page.waitForURL((url) => !url.searchParams.get('search') && url.searchParams.get('category') === 'all')
     await expect(page.getByLabel('Buscar NFTs')).toHaveValue('')
   })
+
+  test('the "Rede" filter narrows results to one network at a time', async ({ page }) => {
+    await page.goto('/?search=&category=all&network=all&minPrice=&maxPrice=&sort=relevance&page=1')
+    await expect(page.locator('a[href^="/nfts/"]').first()).toBeVisible()
+
+    await page.getByRole('checkbox', { name: 'Ethereum' }).click()
+    await page.waitForURL(
+      (url) => url.searchParams.get('network') === 'ethereum' && (url.searchParams.get('page') ?? '1') === '1',
+    )
+    await expect(page.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'false')
+    const ethereumHrefs = await page
+      .locator('a[href^="/nfts/"]')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('href')))
+    expect(ethereumHrefs.length).toBeGreaterThan(0)
+
+    // Switch straight to a different network — each NFT belongs to exactly one, so the two
+    // result sets must be disjoint if the filter is actually taking effect server-side.
+    await page.getByRole('checkbox', { name: 'Ethereum' }).click()
+    await page.getByRole('checkbox', { name: 'Polygon' }).click()
+    await page.waitForURL((url) => url.searchParams.get('network') === 'polygon')
+    await expect(page.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'false')
+    const polygonHrefs = await page
+      .locator('a[href^="/nfts/"]')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('href')))
+    expect(polygonHrefs.length).toBeGreaterThan(0)
+    expect(ethereumHrefs.some((href) => polygonHrefs.includes(href))).toBe(false)
+
+    await page.getByRole('button', { name: 'Limpar filtros' }).click()
+    await page.waitForURL((url) => url.searchParams.get('network') === 'all')
+  })
+
+  test('the price-range slider narrows results and updates the URL', async ({ page }) => {
+    await page.goto('/?search=&category=all&network=all&minPrice=&maxPrice=&sort=relevance&page=1')
+    await expect(page.locator('a[href^="/nfts/"]').first()).toBeVisible()
+    const unfilteredHrefs = await page
+      .locator('a[href^="/nfts/"]')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('href')))
+
+    // Drag the max-price handle down via keyboard (also exercises its accessible name/keyboard
+    // operability) rather than a real pointer drag, which needs the element scrolled into view.
+    const maxThumb = page.getByRole('slider', { name: 'Preço máximo em ETH' })
+    await maxThumb.focus()
+    for (let i = 0; i < 85; i++) await page.keyboard.press('ArrowLeft')
+    await expect(page.getByText('Preço: 0.00 - 10.00 ETH')).not.toBeVisible()
+
+    await page.getByRole('button', { name: 'Aplicar' }).click()
+    await page.waitForURL((url) => Boolean(url.searchParams.get('maxPrice')))
+    await expect(page.locator('[aria-busy]')).toHaveAttribute('aria-busy', 'false')
+
+    const filteredHrefs = await page
+      .locator('a[href^="/nfts/"]')
+      .evaluateAll((els) => els.map((el) => el.getAttribute('href')))
+    expect(filteredHrefs.length).toBeGreaterThan(0)
+    expect(filteredHrefs.length).toBeLessThan(unfilteredHrefs.length)
+
+    await page.getByRole('button', { name: 'Limpar filtros' }).click()
+    await page.waitForURL((url) => !url.searchParams.get('maxPrice'))
+  })
 })
 
 test.describe('Detalhe do NFT — acesso direto e recurso inexistente', () => {

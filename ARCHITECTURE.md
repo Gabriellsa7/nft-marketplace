@@ -13,7 +13,7 @@ Base: `/api` (via Axios, `src/lib/api-client.ts`). Erros seguem sempre o formato
 | | `GET /auth/session` | Nunca dispara o evento global de "sessão expirada" (ver política de sessão); 401 é tratado como "sem sessão", não como erro. |
 | | `POST /auth/logout` | Remove a sessão do lado mock. |
 | | `POST /auth/_expire` *(teste)* | Expira a sessão atual imediatamente. |
-| NFTs | `GET /nfts?search&category&minPrice&maxPrice&sort&page&pageSize` | Paginado (`Paginated<Nft>`); busca cobre nome/coleção/criador/descrição. |
+| NFTs | `GET /nfts?search&category&network&minPrice&maxPrice&sort&page&pageSize&collectionName&excludeId` | Paginado (`Paginated<Nft>`); busca cobre nome/coleção/criador/descrição. `network` é o filtro "Rede" do catálogo; `collectionName`/`excludeId` só são usados pela query de "Mais desta coleção" no detalhe, não expostos na UI de filtro. |
 | | `GET /nfts/:id` | Aceita id ou slug; 404 dedicado (tratado como `notFound()` na rota). |
 | | `POST /nfts/:id/_simulate-update` *(teste)* | Dispara `nft.updated` determinístico. |
 | Favoritos | `GET /favorites` | Requer sessão. |

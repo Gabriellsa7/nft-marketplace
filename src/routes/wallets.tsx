@@ -88,17 +88,17 @@ function WalletsPage() {
                 key={wallet.id}
                 className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-4"
               >
-                <div className="flex flex-col gap-1">
-                  <div className="flex items-center gap-2">
+                <div className="flex min-w-0 flex-col gap-1">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="text-sm font-medium">{wallet.label}</span>
                     <Badge variant={wallet.role === 'primary' ? 'default' : 'outline'}>
                       {wallet.role === 'primary' ? 'Principal' : 'Secundária'}
                     </Badge>
                     <Badge variant="secondary">{NETWORK_LABELS[wallet.network]}</Badge>
                   </div>
-                  <span className="font-mono text-xs text-muted-foreground">{wallet.address}</span>
+                  <span className="truncate font-mono text-xs text-muted-foreground">{wallet.address}</span>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => setDialogWallet(wallet)}>
+                <Button variant="outline" size="sm" className="shrink-0" onClick={() => setDialogWallet(wallet)}>
                   Editar
                 </Button>
               </li>
