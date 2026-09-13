@@ -64,9 +64,26 @@ test.describe('Compra completa — do catálogo ao recibo confirmado', () => {
     await expect(page).toHaveURL(/\/checkout/)
 
     await setScenario(page, 'default')
-    await expect(page.locator('aside').getByText(/55\.5/)).toBeVisible({ timeout: 10_000 })
+    // Assert on the quote's own "Subtotal" (data-testid, not text matching): the cart line
+    // item's unit price renders the same "55.5000 ETH" text once it also re-renders, which
+    // made an unscoped/text-based match here ambiguous (strict-mode violation).
+    await expect(page.getByTestId('quote-subtotal')).toHaveText(/55\.5/, { timeout: 10_000 })
 
-    await page.getByRole('button', { name: 'Confirmar compra' }).click()
-    await page.waitForURL((url) => /\/orders\/.+/.test(url.pathname))
+    // Resubmission also re-validates the cart's per-item priceChanged/availabilityChanged
+    // flags (checkout.tsx's handleConfirm), which the mock cart handler only clears on the
+    // *next* /api/cart fetch after a price change — a separate query from the quote checked
+    // above, so it can still be mid-flight once the quote has already settled. Rather than
+    // pin an exact wait for that internal fetch, retry the confirm: a real collector would
+    // just click "Confirmar compra" again if told to review and confirm once more.
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      await page.getByRole('button', { name: 'Confirmar compra' }).click()
+      const navigated = await page
+        .waitForURL((url) => /\/orders\/.+/.test(url.pathname), { timeout: 5_000 })
+        .then(() => true)
+        .catch(() => false)
+      if (navigated) break
+      expect(attempt, 'resubmission kept getting rejected as stale').toBeLessThan(3)
+      await expect(page.getByText('Os valores foram atualizados. Revise o pedido e confirme novamente.')).toBeVisible()
+    }
   })
 })

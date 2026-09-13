@@ -56,7 +56,7 @@ export const Route = createFileRoute('/checkout')({
 function CheckoutPage() {
   const navigate = useNavigate()
   const { data: sessionUser } = useSessionQuery()
-  const { data: cart, isPending: isCartPending } = useCartQuery()
+  const { data: cart, isPending: isCartPending, refetch: refetchCart } = useCartQuery()
   const { data: wallets, isPending: isWalletsPending } = useWalletsQuery()
   const [appliedCoupon] = useAppliedCoupon()
   const createOrderMutation = useCreateOrderMutation()
@@ -109,9 +109,13 @@ function CheckoutPage() {
     setStaleNotice(null)
 
     const reviewed = quote.data
-    const fresh = await quote.refetch()
+    const [fresh, freshCart] = await Promise.all([quote.refetch(), refetchCart()])
     const freshQuote = fresh.data
-    const cartChanged = cart?.items.some((item) => item.priceChanged || item.availabilityChanged)
+    // Re-fetched, not the cached `cart` value: priceChanged/availabilityChanged are one-shot
+    // flags the mock API clears on the fetch right after a change lands, so a stale cached
+    // cart could either miss a real change (never re-fetched yet) or block forever on a
+    // transient flag that a fresh fetch would already show as settled.
+    const cartChanged = freshCart.data?.items.some((item) => item.priceChanged || item.availabilityChanged)
 
     if (
       !freshQuote ||
@@ -256,7 +260,7 @@ function CheckoutPage() {
               <>
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Subtotal</span>
-                  <span>{quote.data.subtotalEth} ETH</span>
+                  <span data-testid="quote-subtotal">{quote.data.subtotalEth} ETH</span>
                 </div>
                 {quote.data.coupon && (
                   <div className="flex justify-between text-accent">
