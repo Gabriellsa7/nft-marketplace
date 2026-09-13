@@ -182,7 +182,7 @@ function HomePage() {
                 {priceInputs.max === '' ? PRICE_MAX.toFixed(2) : Number(priceInputs.max).toFixed(2)} ETH
               </p>
               <Slider
-                aria-label="Faixa de preço em ETH"
+                getAriaLabel={(index) => (index === 0 ? 'Preço mínimo em ETH' : 'Preço máximo em ETH')}
                 min={PRICE_MIN}
                 max={PRICE_MAX}
                 step={0.1}

@@ -108,10 +108,10 @@ Mediana das 3 execuções (Lighthouse 13.4.1, Chrome headless, Node 24):
 
 | Página | Perfil | Performance | Accessibility | Best Practices | SEO | LCP | CLS | TBT |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| início | mobile | 72 ⚠️ | 100 | 96 | 100 | 5.7s | 0.002 | 88ms |
-| início | desktop | 98 | 100 | 96 | 100 | 1.1s | 0.001 | 0ms |
-| detalhe | mobile | 71 ⚠️ | 100 | 96 | 100 | 5.9s | 0.001 | 67ms |
-| detalhe | desktop | 97 | 100 | 96 | 100 | 1.1s | 0.001 | 0ms |
+| início | mobile | 69 ⚠️ | 100 | 96 | 100 | 6.0s | 0.002 | 148ms |
+| início | desktop | 97 | 100 | 96 | 100 | 1.2s | 0.001 | 0ms |
+| detalhe | mobile | 70 ⚠️ | 100 | 96 | 100 | 5.9s | 0.001 | 119ms |
+| detalhe | desktop | 97 | 100 | 96 | 100 | 1.2s | 0.001 | 0ms |
 
 Accessibility, Best Practices e SEO batem a meta com folga em ambos os perfis. CLS é essencialmente zero em todo lugar (os skeletons preservam as dimensões do conteúdo real, como exigido). **Performance mobile fica abaixo da meta (≥90)** — desktop passa com folga (97–98).
 
@@ -123,7 +123,9 @@ Esse custo é uma consequência direta de uma exigência do próprio enunciado (
 
 **Melhoria futura identificada, não aplicada nesta entrega** (risco de regressão perto do prazo, e exigiria reestruturar o gate de mounting): renderizar a árvore React imediatamente (cabeçalho, hero estático) e represar apenas as *buscas de dados* até o MSW estar pronto — hoje o gate é on/off para o app inteiro porque qualquer `fetch`/`XHR` disparado antes do `worker.start()` completar escaparia da interceptação do Service Worker.
 
-Nota sobre o ambiente: as medições rodaram numa máquina de desktop compartilhada (não um runner de CI dedicado/isolado) — a primeira bateria (antes dos fixes de SEO/LCP) mediu LCP mobile ~4.1s; esta segunda bateria, com mais carga concorrente no sistema, mediu ~5.7–5.9s. A direção da causa raiz (boot de JS bloqueando o primeiro paint) é a mesma nas duas; o valor absoluto varia com ruído de máquina, o que é esperado no modo de throttling simulado do Lighthouse e é a própria razão pela qual o enunciado pede 3 medições e a mediana.
+Nota sobre o ambiente: as medições rodaram numa máquina de desktop compartilhada (não um runner de CI dedicado/isolado) — a primeira bateria (antes dos fixes de SEO/LCP) mediu LCP mobile ~4.1s; medições seguintes, com mais carga concorrente no sistema, mediram entre ~5.7s e ~6.0s. A direção da causa raiz (boot de JS bloqueando o primeiro paint) é a mesma em todas; o valor absoluto varia com ruído de máquina, o que é esperado no modo de throttling simulado do Lighthouse e é a própria razão pela qual o enunciado pede 3 medições e a mediana.
+
+Reauditado após a rodada de fidelidade visual desta sessão (filtro "Rede" + slider de preço no catálogo, abas/seção de relacionados no detalhe, tab bar mobile): Performance mobile caiu levemente (72→69 início, 71→70 detalhe) — mais JS por página (Base UI `Slider`/`Tabs`, mais uma query de NFTs relacionados) empurra o `bootup-time`/`mainthread-work-breakdown` já dominante um pouco mais para cima; a causa raiz continua a mesma descrita acima, não uma regressão nova. Accessibility, Best Practices e SEO seguem 100/96/100. No caminho, a auditoria pegou uma regressão real: os dois `<input type="range">` do novo slider de preço não tinham nome acessível (`aria-label` só estava no wrapper, não nos inputs) — Accessibility caiu para 95 numa rodada intermediária; corrigido passando `getAriaLabel` por thumb no componente `Slider` (`src/components/ui/slider.tsx`), confirmado de volta a 100/100 na rodada final (a que está na tabela acima).
 
 ## Limitações conhecidas
 
@@ -131,6 +133,7 @@ Nota sobre o ambiente: as medições rodaram numa máquina de desktop compartilh
 - `POST /nfts/:id/_simulate-update`, `/auth/_expire` e `/orders/:id/_resolve` são hooks só de teste, sem autenticação de operador — aceitáveis aqui porque toda a API já é uma simulação local, mas não deveriam existir num backend real.
 - Reserva de estoque a partir da criação do pedido não existe (dois pedidos pendentes simultâneos para a mesma edição poderiam, em teoria, ambos confirmar além do disponível) — irrelevante no cenário de demonstração (um único navegador/sessão por vez), documentado aqui como trade-off consciente em favor de "preservar itens em pedidos não confirmados".
 - `ReactQueryDevtools` é renderizado incondicionalmente em `src/main.tsx` (não hospedado atrás de `import.meta.env.DEV`), então o botão flutuante aparece também no build de produção/preview — mantido de propósito, já que a entrega é uma demonstração e o painel ajuda a inspecionar cache/eventos ao vivo.
+- Checagem manual de acessibilidade (além do que o Lighthouse audita automaticamente): contraste de texto verificado ponto a ponto para a paleta "Kurio" — todos os pares texto/fundo ficam ≥8:1 (WCAG AAA). Único ponto abaixo do ideal: a borda de `<input>` em repouso (`--input: #55321f` sobre `--background: #140d0a`) tem ~1.7:1 de contraste não-textual, abaixo dos 3:1 recomendados pelo WCAG 1.4.11 — o valor vem direto do Figma (não é um erro de implementação); o foco (`--ring`, 8.5:1) e o `<label>` sempre visível acima de cada campo compensam na prática, mas fica registrado como um ajuste de token possível numa próxima iteração de design. Zoom/reflow sem overflow horizontal já é coberto automaticamente por `e2e/responsive.spec.ts` em 390/768/1440px.
 
 ## Desvios do Figma
 

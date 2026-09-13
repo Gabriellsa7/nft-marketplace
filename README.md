@@ -2,6 +2,12 @@
 
 Frontend do desafio "Marketplace de NFTs": catálogo, carrinho, checkout, conta do colecionador e tempo real via Socket.IO, tudo contra uma API 100% simulada com MSW (sem backend real). Ver `challenge.md` para o enunciado completo e `ARCHITECTURE.md` para contratos, decisões de arquitetura e desvios do Figma.
 
+## Deploy
+
+**URL pública:** <https://nft-marketplace-wheat.vercel.app/>
+
+Publicado na Vercel a partir deste repositório (build de produção `npm run build`), com os mocks (MSW + Socket.IO) ativos — a versão publicada roda inteiramente sem backend real, igual ao ambiente local. Acesso direto e refresh em qualquer rota funcionam normalmente.
+
 ## Stack
 
 React 19 + TypeScript, TanStack Router (rotas e estado da URL) e TanStack Query (estado remoto), Axios, Socket.IO (`socket.io-client` + [`@mswjs/socket.io-binding`](https://github.com/mswjs/socket.io-binding) do lado mock), Tailwind CSS v4 + shadcn/ui (sobre Base UI), MSW 2, Playwright, Lighthouse.
