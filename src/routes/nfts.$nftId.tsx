@@ -320,7 +320,7 @@ function NftDetailPage() {
       </div>
 
       <Tabs defaultValue="details" className="flex flex-col gap-4">
-        <div className="min-w-0 overflow-x-auto">
+        <div className="min-w-0 overflow-x-auto overflow-y-hidden">
           <TabsList variant="line" className="w-max max-w-full">
             <TabsTrigger value="details">Detalhes do NFT</TabsTrigger>
             <TabsTrigger value="reviews">Avaliações de colecionadores ({nft.reviewsCount})</TabsTrigger>
